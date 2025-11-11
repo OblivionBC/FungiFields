@@ -1,5 +1,3 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #include "FungiFieldsCharacter.h"
 #include "Engine/LocalPlayer.h"
 #include "Camera/CameraComponent.h"
@@ -10,8 +8,11 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
-#include "SWarningOrErrorBox.h"
 #include "../Components/InteractionComponent.h"
+#include "AbilitySystemComponent.h"
+#include "../Attributes/CharacterAttributeSet.h"
+#include "../Attributes/EconomyAttributeSet.h"
+#include "../Attributes/LevelAttributeSet.h"
 #include "Misc/CoreMiscDefines.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
@@ -56,8 +57,13 @@ AFungiFieldsCharacter::AFungiFieldsCharacter()
 	// Create interaction component
 	InteractionComponent = CreateDefaultSubobject<UInteractionComponent>(TEXT("InteractionComponent"));
 
-	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
-	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
+	// Create Ability System Component
+	AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
+
+	// Initialize Attribute Sets to nullptr - they will be created and registered in BeginPlay
+	CharacterAttributeSet = nullptr;
+	EconomyAttributeSet = nullptr;
+	LevelAttributeSet = nullptr;
 }
 
 
@@ -67,11 +73,25 @@ void AFungiFieldsCharacter::BeginPlay()
 	// Call the base class  
 	Super::BeginPlay();
 
+	// Initialize Ability System Component and Attribute Sets
+	if (IsValid(AbilitySystemComponent))
+	{
+		// The Ability System Component will create and register these automatically when GetSet is called
+		CharacterAttributeSet = AbilitySystemComponent->GetSet<UCharacterAttributeSet>();
+		EconomyAttributeSet = AbilitySystemComponent->GetSet<UEconomyAttributeSet>();
+		LevelAttributeSet = AbilitySystemComponent->GetSet<ULevelAttributeSet>();
+	}
+
 	// Initialize interaction component with camera reference
 	if (InteractionComponent && FollowCamera)
 	{
 		InteractionComponent->SetCamera(FollowCamera);
 	}
+}
+
+UAbilitySystemComponent* AFungiFieldsCharacter::GetAbilitySystemComponent() const
+{
+	return AbilitySystemComponent;
 }
 
 //////////////////////////////////////////////////////////////////////////

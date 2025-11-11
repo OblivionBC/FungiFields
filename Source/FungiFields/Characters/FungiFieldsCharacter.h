@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "AbilitySystemInterface.h"
 #include "Logging/LogMacros.h"
 #include "FungiFieldsCharacter.generated.h"
 
@@ -12,12 +13,16 @@ class UCameraComponent;
 class UInputMappingContext;
 class UInputAction;
 class UInteractionComponent;
+class UAbilitySystemComponent;
+class UCharacterAttributeSet;
+class UEconomyAttributeSet;
+class ULevelAttributeSet;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
 UCLASS(config=Game)
-class AFungiFieldsCharacter : public ACharacter
+class AFungiFieldsCharacter : public ACharacter, public IAbilitySystemInterface
 {
 	GENERATED_BODY()
 
@@ -32,6 +37,22 @@ class AFungiFieldsCharacter : public ACharacter
 	/** Interaction component for handling interactions with interactable actors */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Interaction", meta = (AllowPrivateAccess = "true"))
 	UInteractionComponent* InteractionComponent;
+
+	/** Ability System Component. Required to use Gameplay Attributes and Gameplay Abilities. */
+	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Abilities", meta = (AllowPrivateAccess = "true"))
+	UAbilitySystemComponent* AbilitySystemComponent;
+
+	/** Character Attribute Set containing Health, Stamina, and Magic attributes. */
+	UPROPERTY()
+	const UCharacterAttributeSet* CharacterAttributeSet;
+
+	/** Economy Attribute Set containing Gold attributes. */
+	UPROPERTY()
+	const UEconomyAttributeSet* EconomyAttributeSet;
+
+	/** Level Attribute Set containing Level and XP attributes. */
+	UPROPERTY()
+	const ULevelAttributeSet* LevelAttributeSet;
 	
 	/** MappingContext */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
@@ -71,6 +92,8 @@ protected:
 	virtual void BeginPlay();
 
 public:
+	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
+
 	/** Returns CameraBoom subobject **/
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	/** Returns FollowCamera subobject **/

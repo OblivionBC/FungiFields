@@ -47,6 +47,8 @@ Content/WindmillValley/
 *.VC.db
 *.VC.opendb
 
+# Proprietary Docs
+Source/docs
 # Precompiled Assets
 SourceArt/**/*.png
 SourceArt/**/*.tga
