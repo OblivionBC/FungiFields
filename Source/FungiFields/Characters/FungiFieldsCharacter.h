@@ -5,20 +5,19 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Logging/LogMacros.h"
-#include "../Widgets/InteractionWidget.h"
-#include "FungiFields/Interfaces/InteractableInterface.h"
 #include "FungiFieldsCharacter.generated.h"
 
 class USpringArmComponent;
 class UCameraComponent;
 class UInputMappingContext;
 class UInputAction;
+class UInteractionComponent;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
 UCLASS(config=Game)
-class AFungiFieldsCharacter : public ACharacter, public IInteractableInterface
+class AFungiFieldsCharacter : public ACharacter
 {
 	GENERATED_BODY()
 
@@ -29,6 +28,10 @@ class AFungiFieldsCharacter : public ACharacter, public IInteractableInterface
 	/** Follow camera */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
 	UCameraComponent* FollowCamera;
+	
+	/** Interaction component for handling interactions with interactable actors */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Interaction", meta = (AllowPrivateAccess = "true"))
+	UInteractionComponent* InteractionComponent;
 	
 	/** MappingContext */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
@@ -42,6 +45,7 @@ class AFungiFieldsCharacter : public ACharacter, public IInteractableInterface
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* MoveAction;
 
+	/** Interact Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* InteractAction;
 	
@@ -49,31 +53,15 @@ class AFungiFieldsCharacter : public ACharacter, public IInteractableInterface
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* LookAction;
 
-	virtual void Interact_Implementation(AActor* Interactor) override;
-	
-	UPROPERTY()
-	AActor* LastInteractable;
-
-	FTimerHandle InteractableResetTimer;
-
-	UInteractionWidget* InteractionWidget = nullptr;
-	TSubclassOf<UUserWidget> InteractionWidgetClass;
 public:
 	AFungiFieldsCharacter();
-	virtual void Tick(float DeltaTime) override;
 
 protected:
-
 	/** Called for movement input */
 	void Move(const FInputActionValue& Value);
-	void Interact(const FInputActionValue& Value);
 
 	/** Called for looking input */
 	void Look(const FInputActionValue& Value);
-	void TraceForInteractable();
-	void ClearInteractable();
-	void ShowInteractionWidget(AActor* Interactable, const FText& Prompt);
-	void HideInteractionWidget();
 
 protected:
 	// APawn interface

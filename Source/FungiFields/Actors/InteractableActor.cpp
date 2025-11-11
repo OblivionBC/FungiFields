@@ -9,23 +9,22 @@
 AInteractableActor::AInteractableActor()
 {
     PrimaryActorTick.bCanEverTick = true;
-
-    SceneRoot = CreateDefaultSubobject<USceneComponent>("SceneRoot");
-    SetRootComponent(SceneRoot);
-
-    Mesh = CreateDefaultSubobject<UStaticMeshComponent>("Mesh");
-    Mesh->SetupAttachment(SceneRoot);
+    SetRootComponent(RootComponent);
 
     Proximity = CreateDefaultSubobject<USphereComponent>("Proximity");
-    Proximity->SetupAttachment(SceneRoot);
+    Proximity->SetupAttachment(RootComponent);
     Proximity->InitSphereRadius(150.f);
     Proximity->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
     Proximity->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
     Proximity->OnComponentBeginOverlap.AddDynamic(this, &AInteractableActor::OnProximityEnter);
     Proximity->OnComponentEndOverlap.AddDynamic(this, &AInteractableActor::OnProximityExit);
+    Proximity->SetupAttachment(RootComponent);
 
+    Mesh = CreateDefaultSubobject<UStaticMeshComponent>("Mesh");
+    Mesh->SetupAttachment(Proximity);
+    
     Widget = CreateDefaultSubobject<UWidgetComponent>("Widget");
-    Widget->SetupAttachment(SceneRoot);
+    Widget->SetupAttachment(Mesh);
     Widget->SetWidgetSpace(EWidgetSpace::World);
     Widget->SetDrawAtDesiredSize(true);
     Widget->SetPivot(FVector2D(0.5f, 0.5f));
@@ -65,7 +64,7 @@ void AInteractableActor::OnProximityEnter(UPrimitiveComponent* OverlappedComp, A
     {
         if (UInteractionWidget* W = GetInteractionWidget())
         {
-            W->SetPromptText(GetInteractionText());
+            W->SetPromptText(GetInteractionText_Implementation());
             W->ShowPrompt();
         }
 

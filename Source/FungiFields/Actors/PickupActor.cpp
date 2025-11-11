@@ -9,23 +9,24 @@ APickupActor::APickupActor()
 {
 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
-	ActorMesh = CreateDefaultSubobject<UStaticMesh>("StaticMesh");
 
 	PickupTriggerSphere = CreateDefaultSubobject<USphereComponent>("PickupTriggerSphere");
+	PickupTriggerSphere->SetupAttachment(RootComponent);
 	PickupTriggerSphere->SetSphereRadius(50.0f, true);
-	PickupTriggerSphere->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	PickupTriggerSphere->SetCollisionResponseToAllChannels(ECR_Overlap);
 	PickupTriggerSphere->SetGenerateOverlapEvents(true);
+
+	ActorMesh = CreateDefaultSubobject<UStaticMeshComponent>("Mesh");
+	ActorMesh->SetupAttachment(PickupTriggerSphere);
 }
 
 // Called when the game starts or when spawned
 void APickupActor::BeginPlay()
 {
 	Super::BeginPlay();
-
-	if (PickupTriggerSphere)
-	{
-		PickupTriggerSphere->OnComponentBeginOverlap.AddDynamic(this, &APickupActor::TryPickup);
-	}
+	
+	PickupTriggerSphere->OnComponentBeginOverlap.AddDynamic(this, &APickupActor::TryPickup);
+	PickupTriggerSphere->SetGenerateOverlapEvents(true);
 }
 
 // Called every frame

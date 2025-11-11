@@ -11,20 +11,13 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "SWarningOrErrorBox.h"
-#include "Blueprint/UserWidget.h"
-#include "../Interfaces/InteractableInterface.h"
+#include "../Components/InteractionComponent.h"
 #include "Misc/CoreMiscDefines.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
 //////////////////////////////////////////////////////////////////////////
 // AFungiFieldsCharacter
-
-void AFungiFieldsCharacter::Interact_Implementation(AActor* Interactor)
-{
-	IInteractableInterface::Interact_Implementation(Interactor);
-	UE_LOG(LogTemp, Log, TEXT("Implementation called!"));
-}
 
 AFungiFieldsCharacter::AFungiFieldsCharacter()
 {
@@ -60,21 +53,25 @@ AFungiFieldsCharacter::AFungiFieldsCharacter()
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName); // Attach the camera to the end of the boom and let the boom adjust to match the controller orientation
 	FollowCamera->bUsePawnControlRotation = false; // Camera does not rotate relative to arm
 
+	// Create interaction component
+	InteractionComponent = CreateDefaultSubobject<UInteractionComponent>(TEXT("InteractionComponent"));
+
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
 }
 
-void AFungiFieldsCharacter::Tick(float DeltaTime)
-{
-	Super::Tick(DeltaTime);
-	TraceForInteractable();
-}
 
 
 void AFungiFieldsCharacter::BeginPlay()
 {
 	// Call the base class  
 	Super::BeginPlay();
+
+	// Initialize interaction component with camera reference
+	if (InteractionComponent && FollowCamera)
+	{
+		InteractionComponent->SetCamera(FollowCamera);
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -104,8 +101,10 @@ void AFungiFieldsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 		// Looking
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AFungiFieldsCharacter::Look);
 
-		// Game Mechanics
-		EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Triggered, this, &AFungiFieldsCharacter::Interact);
+		if (InteractionComponent)
+		{
+			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Triggered, InteractionComponent, &UInteractionComponent::Interact);
+		}
 	}
 	else
 	{
@@ -136,40 +135,6 @@ void AFungiFieldsCharacter::Move(const FInputActionValue& Value)
 	}
 }
 
-
-void AFungiFieldsCharacter::Interact(const FInputActionValue& Value)
-{
-	FVector Start = FollowCamera->GetComponentLocation(); // Or GetActorLocation()
-	FVector ForwardVector = FollowCamera->GetForwardVector(); // Use camera for better precision
-	FVector End = Start + (ForwardVector * 575.0f); // Trace distance
-
-	FHitResult HitResult;
-	FCollisionQueryParams TraceParams(FName(TEXT("InteractTrace")), true, this);
-	TraceParams.bReturnPhysicalMaterial = false;
-	TraceParams.bTraceComplex = true;
-
-	bool bHit = GetWorld()->LineTraceSingleByChannel(
-		HitResult,
-		Start,
-		End,
-		ECC_Visibility,
-		TraceParams
-	);
-
-	DrawDebugLine(GetWorld(), Start, End, FColor::Green, false, 2.0f);
-
-	if (bHit && HitResult.GetActor())
-	{
-		AActor* HitActor = HitResult.GetActor();
-		if (HitActor->Implements<UInteractableInterface>())
-		{
-			UE_LOG(LogTemp, Warning, TEXT("Interact with Actor: %s"), *HitActor->GetName());
-			IInteractableInterface::Execute_Interact(HitActor, this);
-		}
-	}
-}
-
-
 void AFungiFieldsCharacter::Look(const FInputActionValue& Value)
 {
 	// input is a Vector2D
@@ -182,79 +147,3 @@ void AFungiFieldsCharacter::Look(const FInputActionValue& Value)
 		AddControllerPitchInput(LookAxisVector.Y);
 	}
 }
-
-void AFungiFieldsCharacter::TraceForInteractable()
-{
-	FVector Start = FollowCamera->GetComponentLocation();
-	FVector End = Start + (FollowCamera->GetForwardVector() * 575.0f);
-
-	FHitResult HitResult;
-	FCollisionQueryParams Params(FName(TEXT("InteractTrace")), true, this);
-
-	GetWorld()->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, Params);
-	
-	AActor* HitActor = HitResult.GetActor();
-	if (HitActor && HitActor->Implements<UInteractableInterface>())
-	{
-		if(GEngine)
-			GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("Hiy Actor "));	
-		UE_LOG(LogTemp, Warning, TEXT("Hit Actor: %s"), *HitActor->GetName());
-
-		if (HitActor != LastInteractable)
-		{
-			FText Prompt = IInteractableInterface::Execute_GetInteractionText(HitActor);
-			ShowInteractionWidget(HitActor, Prompt);
-			LastInteractable = HitActor;
-			GetWorld()->GetTimerManager().ClearTimer(InteractableResetTimer);
-		}
-	}
-	else
-	{
-		// Start/reset the timer to clear the widget
-		GetWorld()->GetTimerManager().SetTimer(
-			InteractableResetTimer,
-			this,
-			&AFungiFieldsCharacter::ClearInteractable,
-			3.0f,
-			false
-		);
-	}
-}
-
-void AFungiFieldsCharacter::ClearInteractable()
-{
-	LastInteractable = nullptr;
-	HideInteractionWidget();
-	if(GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("Clearing Widget"));
-}
-
-void AFungiFieldsCharacter::ShowInteractionWidget(AActor* Interactable, const FText& Prompt)
-{
-	if(GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("Showing Widget "));
-	if (!InteractionWidget && InteractionWidgetClass)
-	{
-		InteractionWidget = CreateWidget<UInteractionWidget>(GetWorld(), InteractionWidgetClass);
-		InteractionWidget->AddToViewport();
-	}
-
-	if (InteractionWidget)
-	{
-		// Assuming your widget has a method to set the prompt text
-		InteractionWidget->SetPromptText(Prompt);
-
-		InteractionWidget->SetVisibility(ESlateVisibility::Visible);
-	}
-	LastInteractable = Interactable;
-}
-
-void AFungiFieldsCharacter::HideInteractionWidget()
-{
-	if (InteractionWidget)
-	{
-		InteractionWidget->HidePrompt();
-	}
-}
-
-

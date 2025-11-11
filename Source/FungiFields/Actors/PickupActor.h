@@ -22,7 +22,7 @@ protected:
 	virtual void BeginPlay() override;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Pickup")
-	UStaticMesh* ActorMesh;
+	UStaticMeshComponent* ActorMesh;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Pickup")
 	USphereComponent* PickupTriggerSphere;
