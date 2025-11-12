@@ -9,10 +9,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "../Components/InteractionComponent.h"
-#include "AbilitySystemComponent.h"
-#include "../Attributes/CharacterAttributeSet.h"
-#include "../Attributes/EconomyAttributeSet.h"
-#include "../Attributes/LevelAttributeSet.h"
+#include "../Components/InventoryComponent.h"
 #include "Misc/CoreMiscDefines.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
@@ -57,13 +54,8 @@ AFungiFieldsCharacter::AFungiFieldsCharacter()
 	// Create interaction component
 	InteractionComponent = CreateDefaultSubobject<UInteractionComponent>(TEXT("InteractionComponent"));
 
-	// Create Ability System Component
-	AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
-
-	// Initialize Attribute Sets to nullptr - they will be created and registered in BeginPlay
-	CharacterAttributeSet = nullptr;
-	EconomyAttributeSet = nullptr;
-	LevelAttributeSet = nullptr;
+	// Create inventory component
+	InventoryComponent = CreateDefaultSubobject<UInventoryComponent>(TEXT("InventoryComponent"));
 }
 
 
@@ -72,15 +64,6 @@ void AFungiFieldsCharacter::BeginPlay()
 {
 	// Call the base class  
 	Super::BeginPlay();
-
-	// Initialize Ability System Component and Attribute Sets
-	if (IsValid(AbilitySystemComponent))
-	{
-		// The Ability System Component will create and register these automatically when GetSet is called
-		CharacterAttributeSet = AbilitySystemComponent->GetSet<UCharacterAttributeSet>();
-		EconomyAttributeSet = AbilitySystemComponent->GetSet<UEconomyAttributeSet>();
-		LevelAttributeSet = AbilitySystemComponent->GetSet<ULevelAttributeSet>();
-	}
 
 	// Initialize interaction component with camera reference
 	if (InteractionComponent && FollowCamera)

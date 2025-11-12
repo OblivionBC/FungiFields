@@ -13,6 +13,7 @@ class UCameraComponent;
 class UInputMappingContext;
 class UInputAction;
 class UInteractionComponent;
+class UInventoryComponent;
 class UAbilitySystemComponent;
 class UCharacterAttributeSet;
 class UEconomyAttributeSet;
@@ -25,7 +26,7 @@ UCLASS(config=Game)
 class AFungiFieldsCharacter : public ACharacter, public IAbilitySystemInterface
 {
 	GENERATED_BODY()
-
+public:
 	/** Camera boom positioning the camera behind the character */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
 	USpringArmComponent* CameraBoom;
@@ -37,6 +38,10 @@ class AFungiFieldsCharacter : public ACharacter, public IAbilitySystemInterface
 	/** Interaction component for handling interactions with interactable actors */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Interaction", meta = (AllowPrivateAccess = "true"))
 	UInteractionComponent* InteractionComponent;
+
+	/** Inventory component for managing player inventory */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory", meta = (AllowPrivateAccess = "true"))
+	UInventoryComponent* InventoryComponent;
 
 	/** Ability System Component. Required to use Gameplay Attributes and Gameplay Abilities. */
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Abilities", meta = (AllowPrivateAccess = "true"))
