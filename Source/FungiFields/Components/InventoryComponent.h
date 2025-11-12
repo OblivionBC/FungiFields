@@ -27,6 +27,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Inventory")
 	int32 GetMaxSlots() const { return InventorySlots.Num(); }
 
+	UFUNCTION(BlueprintPure, Category = "Inventory")
+	const TArray<FInventorySlot>& GetInventorySlots() const { return InventorySlots; }
+
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	bool EquipSlot(int32 SlotIndex);
+
+	UFUNCTION(BlueprintPure, Category = "Inventory")
+	int32 GetEquippedSlot() const { return CurrentEquippedSlotIndex; }
+
 	UPROPERTY(BlueprintAssignable, Category = "Inventory")
 	FOnInventoryChanged OnInventoryChanged;
 
@@ -38,6 +47,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = "Inventory Data")
 	TArray<FInventorySlot> InventorySlots;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory Data")
+	int32 CurrentEquippedSlotIndex = INDEX_NONE;
 
 private:
 	bool TryStackItem(UItemDataAsset* ItemToAdd, int32& RemainingAmount);

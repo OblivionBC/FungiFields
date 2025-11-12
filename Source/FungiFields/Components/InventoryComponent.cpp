@@ -3,6 +3,7 @@
 
 UInventoryComponent::UInventoryComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
+	, CurrentEquippedSlotIndex(INDEX_NONE)
 {
 	PrimaryComponentTick.bCanEverTick = false;
 }
@@ -99,3 +100,21 @@ void UInventoryComponent::BroadcastUpdate()
 	OnInventoryChanged.Broadcast();
 }
 
+bool UInventoryComponent::EquipSlot(int32 SlotIndex)
+{
+	const int32 HotbarSize = 9;
+	
+	if (SlotIndex < 0 || SlotIndex >= HotbarSize)
+	{
+		return false;
+	}
+
+	if (SlotIndex >= InventorySlots.Num())
+	{
+		return false;
+	}
+
+	CurrentEquippedSlotIndex = SlotIndex;
+	BroadcastUpdate();
+	return true;
+}
