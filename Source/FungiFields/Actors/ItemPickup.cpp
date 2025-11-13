@@ -40,7 +40,6 @@ void AItemPickup::Interact_Implementation(AActor* Interactor)
 			return;
 		}
 		
-		// Log failure for debugging
 		UE_LOG(LogTemp, Warning, TEXT("ItemPickup::Interact_Implementation: Failed to add item. Interactor: %s, ItemDataAsset: %s"), 
 			*Interactor->GetName(), *ItemDataAsset->GetName());
 	}

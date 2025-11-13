@@ -21,7 +21,7 @@ void UPlayerHUDWidget::BindToAttributeDelegates()
 	}
 
 	UAbilitySystemComponent* ASC = PlayerCharacter->GetAbilitySystemComponent();
-	if (!ASC)
+	if (!ASC || !PlayerCharacter->EconomyAttributeSet || !PlayerCharacter->LevelAttributeSet)
 	{
 		return;
 	}
@@ -32,16 +32,7 @@ void UPlayerHUDWidget::BindToAttributeDelegates()
 	{
 		ASC->GetGameplayAttributeValueChangeDelegate(EconomyAttributeSet->GetGoldAttribute())
 			.AddUObject(this, &UPlayerHUDWidget::OnGoldUpdated);
-	}
-
-	if (const ULevelAttributeSet* LevelAttributeSet = PlayerCharacter->LevelAttributeSet)
-	{
-		ASC->GetGameplayAttributeValueChangeDelegate(LevelAttributeSet->GetLevelAttribute())
-			.AddUObject(this, &UPlayerHUDWidget::OnLevelUpdated);
-	}
-
-	if (const UEconomyAttributeSet* EconomyAttributeSet = PlayerCharacter->EconomyAttributeSet)
-	{
+		
 		const float CurrentGold = EconomyAttributeSet->GetGold();
 		if (GoldText)
 		{
@@ -51,6 +42,9 @@ void UPlayerHUDWidget::BindToAttributeDelegates()
 
 	if (const ULevelAttributeSet* LevelAttributeSet = PlayerCharacter->LevelAttributeSet)
 	{
+		ASC->GetGameplayAttributeValueChangeDelegate(LevelAttributeSet->GetLevelAttribute())
+			.AddUObject(this, &UPlayerHUDWidget::OnLevelUpdated);
+		
 		const float CurrentLevel = LevelAttributeSet->GetLevel();
 		if (LevelText)
 		{

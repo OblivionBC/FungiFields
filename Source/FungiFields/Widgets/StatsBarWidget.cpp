@@ -3,10 +3,39 @@
 #include "Components/ProgressBar.h"
 #include "AbilitySystemComponent.h"
 #include "../Attributes/CharacterAttributeSet.h"
+#include "Components/Widget.h"
+#include "Components/CanvasPanelSlot.h"
 
 void UStatsBarWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+
+	if (HealthBar)
+	{
+		BaseHealthBarWidth = HealthBar->GetDesiredSize().X;
+		if (BaseHealthBarWidth <= 0.0f)
+		{
+			BaseHealthBarWidth = BaseBarWidth;
+		}
+	}
+
+	if (StaminaBar)
+	{
+		BaseStaminaBarWidth = StaminaBar->GetDesiredSize().X;
+		if (BaseStaminaBarWidth <= 0.0f)
+		{
+			BaseStaminaBarWidth = BaseBarWidth;
+		}
+	}
+
+	if (MagicBar)
+	{
+		BaseMagicBarWidth = MagicBar->GetDesiredSize().X;
+		if (BaseMagicBarWidth <= 0.0f)
+		{
+			BaseMagicBarWidth = BaseBarWidth;
+		}
+	}
 
 	BindToPlayerComponentDelegates();
 }
@@ -20,7 +49,7 @@ void UStatsBarWidget::BindToPlayerComponentDelegates()
 	}
 
 	UAbilitySystemComponent* ASC = PlayerCharacter->GetAbilitySystemComponent();
-	if (!ASC)
+	if (!ASC || !PlayerCharacter->CharacterAttributeSet)
 	{
 		return;
 	}
@@ -38,12 +67,22 @@ void UStatsBarWidget::BindToPlayerComponentDelegates()
 		ASC->GetGameplayAttributeValueChangeDelegate(CharacterAttributeSet->GetMagicAttribute())
 			.AddUObject(this, &UStatsBarWidget::OnMagicUpdated);
 
+		ASC->GetGameplayAttributeValueChangeDelegate(CharacterAttributeSet->GetMaxHealthAttribute())
+			.AddUObject(this, &UStatsBarWidget::OnMaxHealthUpdated);
+
+		ASC->GetGameplayAttributeValueChangeDelegate(CharacterAttributeSet->GetMaxStaminaAttribute())
+			.AddUObject(this, &UStatsBarWidget::OnMaxStaminaUpdated);
+
+		ASC->GetGameplayAttributeValueChangeDelegate(CharacterAttributeSet->GetMaxMagicAttribute())
+			.AddUObject(this, &UStatsBarWidget::OnMaxMagicUpdated);
+
 		if (HealthBar)
 		{
 			const float CurrentHealth = CharacterAttributeSet->GetHealth();
 			const float MaxHealth = CharacterAttributeSet->GetMaxHealth();
 			const float HealthPercent = MaxHealth > 0.0f ? (CurrentHealth / MaxHealth) : 0.0f;
 			HealthBar->SetPercent(HealthPercent);
+			UpdateBarWidth(HealthBar, MaxHealth, BaseMaxHealth);
 		}
 
 		if (StaminaBar)
@@ -52,6 +91,7 @@ void UStatsBarWidget::BindToPlayerComponentDelegates()
 			const float MaxStamina = CharacterAttributeSet->GetMaxStamina();
 			const float StaminaPercent = MaxStamina > 0.0f ? (CurrentStamina / MaxStamina) : 0.0f;
 			StaminaBar->SetPercent(StaminaPercent);
+			UpdateBarWidth(StaminaBar, MaxStamina, BaseMaxStamina);
 		}
 
 		if (MagicBar)
@@ -60,6 +100,7 @@ void UStatsBarWidget::BindToPlayerComponentDelegates()
 			const float MaxMagic = CharacterAttributeSet->GetMaxMagic();
 			const float MagicPercent = MaxMagic > 0.0f ? (CurrentMagic / MaxMagic) : 0.0f;
 			MagicBar->SetPercent(MagicPercent);
+			UpdateBarWidth(MagicBar, MaxMagic, BaseMaxMagic);
 		}
 	}
 }
@@ -103,6 +144,90 @@ void UStatsBarWidget::OnMagicUpdated(const FOnAttributeChangeData& Data)
 			const float MagicPercent = MaxMagic > 0.0f ? (Data.NewValue / MaxMagic) : 0.0f;
 			MagicBar->SetPercent(MagicPercent);
 		}
+	}
+}
+
+void UStatsBarWidget::OnMaxHealthUpdated(const FOnAttributeChangeData& Data)
+{
+	if (HealthBar)
+	{
+		UpdateBarWidth(HealthBar, Data.NewValue, BaseMaxHealth);
+		AFungiFieldsCharacter* PlayerCharacter = GetPlayerCharacter();
+		if (PlayerCharacter && PlayerCharacter->CharacterAttributeSet)
+		{
+			const float CurrentHealth = PlayerCharacter->CharacterAttributeSet->GetHealth();
+			const float HealthPercent = Data.NewValue > 0.0f ? (CurrentHealth / Data.NewValue) : 0.0f;
+			HealthBar->SetPercent(HealthPercent);
+		}
+	}
+}
+
+void UStatsBarWidget::OnMaxStaminaUpdated(const FOnAttributeChangeData& Data)
+{
+	if (StaminaBar)
+	{
+		UpdateBarWidth(StaminaBar, Data.NewValue, BaseMaxStamina);
+		AFungiFieldsCharacter* PlayerCharacter = GetPlayerCharacter();
+		if (PlayerCharacter && PlayerCharacter->CharacterAttributeSet)
+		{
+			const float CurrentStamina = PlayerCharacter->CharacterAttributeSet->GetStamina();
+			const float StaminaPercent = Data.NewValue > 0.0f ? (CurrentStamina / Data.NewValue) : 0.0f;
+			StaminaBar->SetPercent(StaminaPercent);
+		}
+	}
+}
+
+void UStatsBarWidget::OnMaxMagicUpdated(const FOnAttributeChangeData& Data)
+{
+	if (MagicBar)
+	{
+		UpdateBarWidth(MagicBar, Data.NewValue, BaseMaxMagic);
+		AFungiFieldsCharacter* PlayerCharacter = GetPlayerCharacter();
+		if (PlayerCharacter && PlayerCharacter->CharacterAttributeSet)
+		{
+			const float CurrentMagic = PlayerCharacter->CharacterAttributeSet->GetMagic();
+			const float MagicPercent = Data.NewValue > 0.0f ? (CurrentMagic / Data.NewValue) : 0.0f;
+			MagicBar->SetPercent(MagicPercent);
+		}
+	}
+}
+
+void UStatsBarWidget::UpdateBarWidth(UProgressBar* Bar, float CurrentMax, float BaseMax)
+{
+	if (!Bar || BaseMax <= 0.0f)
+	{
+		return;
+	}
+
+	float BaseWidth = 0.0f;
+	if (Bar == HealthBar)
+	{
+		BaseWidth = BaseHealthBarWidth;
+	}
+	else if (Bar == StaminaBar)
+	{
+		BaseWidth = BaseStaminaBarWidth;
+	}
+	else if (Bar == MagicBar)
+	{
+		BaseWidth = BaseMagicBarWidth;
+	}
+
+	if (BaseWidth <= 0.0f)
+	{
+		return;
+	}
+
+	float ScaleFactor = CurrentMax / BaseMax;
+	ScaleFactor = FMath::Clamp(ScaleFactor, MinScaleFactor, MaxScaleFactor);
+	float NewWidth = BaseWidth * ScaleFactor;
+
+	if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Bar->Slot))
+	{
+		FVector2D CurrentSize = CanvasSlot->GetSize();
+		CanvasSlot->SetSize(FVector2D(NewWidth, CurrentSize.Y));
+		CanvasSlot->SetAlignment(FVector2D(0.0f, 0.5f));
+		CanvasSlot->SetAnchors(FAnchors(0.0f, 0.5f));
 	}
 }
 

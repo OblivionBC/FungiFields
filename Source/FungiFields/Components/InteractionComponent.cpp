@@ -69,6 +69,7 @@ void UInteractionComponent::Interact(const FInputActionValue& Value)
 		{
 			UE_LOG(LogTemp, Warning, TEXT("Interact with Actor: %s"), *HitActor->GetName());
 			IInteractableInterface::Execute_Interact(HitActor, GetOwner());
+			ClearInteractable();
 		}
 	}
 }
@@ -97,10 +98,6 @@ void UInteractionComponent::TraceForInteractable()
 	AActor* HitActor = HitResult.GetActor();
 	if (HitActor && HitActor->Implements<UInteractableInterface>())
 	{
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("Hit Actor"));
-		}
 		UE_LOG(LogTemp, Warning, TEXT("Hit Actor: %s"), *HitActor->GetName());
 
 		if (HitActor != LastInteractable)
@@ -113,13 +110,21 @@ void UInteractionComponent::TraceForInteractable()
 	}
 	else
 	{
-		World->GetTimerManager().SetTimer(
-			InteractableResetTimer,
-			this,
-			&UInteractionComponent::ClearInteractable,
-			ClearDelay,
-			false
-		);
+		HideInteractionWidget();
+		if (LastInteractable && !IsValid(LastInteractable))
+		{
+			ClearInteractable();
+		}
+		else
+		{
+			World->GetTimerManager().SetTimer(
+				InteractableResetTimer,
+				this,
+				&UInteractionComponent::ClearInteractable,
+				ClearDelay,
+				false
+			);
+		}
 	}
 }
 
@@ -127,6 +132,12 @@ void UInteractionComponent::ClearInteractable()
 {
 	LastInteractable = nullptr;
 	HideInteractionWidget();
+	
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(InteractableResetTimer);
+	}
+	
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("Clearing Widget"));
@@ -165,5 +176,6 @@ void UInteractionComponent::HideInteractionWidget()
 	{
 		InteractionWidget->HidePrompt();
 	}
+	LastInteractable = nullptr;
 }
 

@@ -10,6 +10,12 @@
 #include "InputActionValue.h"
 #include "../Components/InteractionComponent.h"
 #include "../Components/InventoryComponent.h"
+#include "AbilitySystemComponent.h"
+#include "../Attributes/CharacterAttributeSet.h"
+#include "../Attributes/EconomyAttributeSet.h"
+#include "../Attributes/LevelAttributeSet.h"
+#include "../Widgets/PlayerHUDWidget.h"
+#include "Blueprint/UserWidget.h"
 #include "Misc/CoreMiscDefines.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
@@ -56,6 +62,9 @@ AFungiFieldsCharacter::AFungiFieldsCharacter()
 
 	// Create inventory component
 	InventoryComponent = CreateDefaultSubobject<UInventoryComponent>(TEXT("InventoryComponent"));
+
+	// Create Ability System Component
+	AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
 }
 
 
@@ -64,6 +73,57 @@ void AFungiFieldsCharacter::BeginPlay()
 {
 	// Call the base class  
 	Super::BeginPlay();
+
+	if (AbilitySystemComponent)
+	{
+		AbilitySystemComponent->InitAbilityActorInfo(this, this);
+
+		CharacterAttributeSet = NewObject<UCharacterAttributeSet>(this);
+		if (CharacterAttributeSet)
+		{
+			AbilitySystemComponent->AddAttributeSetSubobject(CharacterAttributeSet);
+			
+			CharacterAttributeSet->SetHealth(100.0f);
+			CharacterAttributeSet->SetMaxHealth(100.0f);
+			CharacterAttributeSet->SetStamina(100.0f);
+			CharacterAttributeSet->SetMaxStamina(100.0f);
+			CharacterAttributeSet->SetMagic(50.0f);
+			CharacterAttributeSet->SetMaxMagic(50.0f);
+		}
+
+		EconomyAttributeSet = NewObject<UEconomyAttributeSet>(this);
+		if (EconomyAttributeSet)
+		{
+			AbilitySystemComponent->AddAttributeSetSubobject(EconomyAttributeSet);
+			
+			EconomyAttributeSet->SetGold(0.0f);
+			EconomyAttributeSet->SetMaxGold(999999.0f);
+		}
+
+		LevelAttributeSet = NewObject<ULevelAttributeSet>(this);
+		if (LevelAttributeSet)
+		{
+			AbilitySystemComponent->AddAttributeSetSubobject(LevelAttributeSet);
+			
+			LevelAttributeSet->SetLevel(1.0f);
+			LevelAttributeSet->SetMaxLevel(100.0f);
+		LevelAttributeSet->SetXP(0.0f);
+		LevelAttributeSet->SetMaxXP(100.0f);
+		}
+	}
+
+	if (HUDWidgetClass && IsPlayerControlled())
+	{
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			HUDWidget = CreateWidget<UPlayerHUDWidget>(GetWorld(), HUDWidgetClass);
+			if (HUDWidget)
+			{
+				HUDWidget->SetOwningPlayer(PC);
+				HUDWidget->AddToViewport();
+			}
+		}
+	}
 
 	// Initialize interaction component with camera reference
 	if (InteractionComponent && FollowCamera)
@@ -106,7 +166,7 @@ void AFungiFieldsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 
 		if (InteractionComponent)
 		{
-			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Triggered, InteractionComponent, &UInteractionComponent::Interact);
+			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, InteractionComponent, &UInteractionComponent::Interact);
 		}
 	}
 	else

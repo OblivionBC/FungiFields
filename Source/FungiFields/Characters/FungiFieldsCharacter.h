@@ -18,6 +18,7 @@ class UAbilitySystemComponent;
 class UCharacterAttributeSet;
 class UEconomyAttributeSet;
 class ULevelAttributeSet;
+class UPlayerHUDWidget;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
@@ -49,15 +50,15 @@ public:
 
 	/** Character Attribute Set containing Health, Stamina, and Magic attributes. */
 	UPROPERTY()
-	const UCharacterAttributeSet* CharacterAttributeSet;
+	UCharacterAttributeSet* CharacterAttributeSet;
 
 	/** Economy Attribute Set containing Gold attributes. */
 	UPROPERTY()
-	const UEconomyAttributeSet* EconomyAttributeSet;
+	UEconomyAttributeSet* EconomyAttributeSet;
 
 	/** Level Attribute Set containing Level and XP attributes. */
 	UPROPERTY()
-	const ULevelAttributeSet* LevelAttributeSet;
+	ULevelAttributeSet* LevelAttributeSet;
 	
 	/** MappingContext */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
@@ -78,6 +79,14 @@ public:
 	/** Look Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* LookAction;
+
+	/** HUD Widget class to create and display */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
+	TSubclassOf<UPlayerHUDWidget> HUDWidgetClass;
+
+	/** Instance of the HUD widget */
+	UPROPERTY()
+	TObjectPtr<UPlayerHUDWidget> HUDWidget;
 
 public:
 	AFungiFieldsCharacter();

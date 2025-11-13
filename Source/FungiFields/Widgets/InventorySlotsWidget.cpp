@@ -8,6 +8,7 @@
 #include "Components/TextBlock.h"
 #include "Components/Border.h"
 #include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "../Data/UItemDataAsset.h"
 #include "Engine/Texture2D.h"
 
@@ -95,20 +96,40 @@ UWidget* UInventorySlotsWidget::GetOrCreateSlotWidget(int32 SlotIndex)
 
 	UBorder* SlotBorder = NewObject<UBorder>(this);
 	SlotBorder->SetPadding(FMargin(2.0f));
+	
+	FSlateBrush DefaultBrush;
+	DefaultBrush.DrawAs = ESlateBrushDrawType::Box;
+	DefaultBrush.Margin = FMargin(1.0f);
+	DefaultBrush.TintColor = FSlateColor(FLinearColor(0.2f, 0.2f, 0.2f, 1.0f)); // Dark gray background
+	SlotBorder->SetBrush(DefaultBrush);
+	SlotBorder->SetBrushColor(FLinearColor::White);
 
 	UOverlay* SlotOverlay = NewObject<UOverlay>(this);
 	
 	UImage* ItemIcon = NewObject<UImage>(this);
-	ItemIcon->SetBrushFromTexture(nullptr); // Will be set by UpdateSlotWidget
-	ItemIcon->SetVisibility(ESlateVisibility::Collapsed); // Hidden by default
+	ItemIcon->SetBrushFromTexture(nullptr);
+	ItemIcon->SetVisibility(ESlateVisibility::Collapsed);
+	ItemIcon->SetBrushTintColor(FSlateColor(FLinearColor::White));
 	
 	UTextBlock* ItemCount = NewObject<UTextBlock>(this);
 	ItemCount->SetText(FText::GetEmpty());
-	ItemCount->SetVisibility(ESlateVisibility::Collapsed); // Hidden by default
+	ItemCount->SetVisibility(ESlateVisibility::Collapsed);
 	ItemCount->SetJustification(ETextJustify::Right);
 	
-	SlotOverlay->AddChild(ItemIcon);
-	SlotOverlay->AddChild(ItemCount);
+	UOverlaySlot* IconSlot = SlotOverlay->AddChildToOverlay(ItemIcon);
+	if (IconSlot)
+	{
+		IconSlot->SetHorizontalAlignment(HAlign_Fill);
+		IconSlot->SetVerticalAlignment(VAlign_Fill);
+	}
+	
+	UOverlaySlot* CountSlot = SlotOverlay->AddChildToOverlay(ItemCount);
+	if (CountSlot)
+	{
+		CountSlot->SetHorizontalAlignment(HAlign_Right);
+		CountSlot->SetVerticalAlignment(VAlign_Bottom);
+		CountSlot->SetPadding(FMargin(4.0f));
+	}
 	
 	SlotBorder->AddChild(SlotOverlay);
 	
@@ -139,10 +160,20 @@ void UInventorySlotsWidget::UpdateSlotWidget(UWidget* SlotWidget, const FInvento
 	if (bIsEquipped)
 	{
 		SlotBorder->SetBrushColor(FLinearColor::Yellow);
+		FSlateBrush EquippedBrush;
+		EquippedBrush.DrawAs = ESlateBrushDrawType::Box;
+		EquippedBrush.Margin = FMargin(3.0f);
+		EquippedBrush.TintColor = FSlateColor(FLinearColor(0.2f, 0.2f, 0.2f, 1.0f));
+		SlotBorder->SetBrush(EquippedBrush);
 	}
 	else
 	{
 		SlotBorder->SetBrushColor(FLinearColor::White);
+		FSlateBrush NormalBrush;
+		NormalBrush.DrawAs = ESlateBrushDrawType::Box;
+		NormalBrush.Margin = FMargin(1.0f);
+		NormalBrush.TintColor = FSlateColor(FLinearColor(0.2f, 0.2f, 0.2f, 1.0f));
+		SlotBorder->SetBrush(NormalBrush);
 	}
 
 	UOverlay* SlotOverlay = nullptr;
@@ -161,11 +192,12 @@ void UInventorySlotsWidget::UpdateSlotWidget(UWidget* SlotWidget, const FInvento
 
 	for (int32 i = 0; i < SlotOverlay->GetChildrenCount(); ++i)
 	{
-		if (UImage* Image = Cast<UImage>(SlotOverlay->GetChildAt(i)))
+		UWidget* Child = SlotOverlay->GetChildAt(i);
+		if (UImage* Image = Cast<UImage>(Child))
 		{
 			ItemIcon = Image;
 		}
-		else if (UTextBlock* Text = Cast<UTextBlock>(SlotOverlay->GetChildAt(i)))
+		else if (UTextBlock* Text = Cast<UTextBlock>(Child))
 		{
 			ItemCount = Text;
 		}
@@ -188,15 +220,30 @@ void UInventorySlotsWidget::UpdateSlotWidget(UWidget* SlotWidget, const FInvento
 	{
 		if (ItemIcon)
 		{
-			ItemIcon->SetVisibility(ESlateVisibility::Visible);
-			
 			if (SlotData.ItemDefinition && SlotData.ItemDefinition->ItemIcon.IsValid())
 			{
 				UTexture2D* IconTexture = SlotData.ItemDefinition->ItemIcon.LoadSynchronous();
 				if (IconTexture)
 				{
-					ItemIcon->SetBrushFromTexture(IconTexture);
+					ItemIcon->SetBrushFromTexture(IconTexture, true);
+					
+					FSlateBrush Brush = ItemIcon->GetBrush();
+					Brush.ImageSize = FVector2D(IconTexture->GetSizeX(), IconTexture->GetSizeY());
+					Brush.DrawAs = ESlateBrushDrawType::Image;
+					Brush.Tiling = ESlateBrushTileType::NoTile;
+					Brush.ImageType = ESlateBrushImageType::FullColor;
+					ItemIcon->SetBrush(Brush);
+					
+					ItemIcon->SetVisibility(ESlateVisibility::Visible);
 				}
+				else
+				{
+					ItemIcon->SetVisibility(ESlateVisibility::Collapsed);
+				}
+			}
+			else
+			{
+				ItemIcon->SetVisibility(ESlateVisibility::Collapsed);
 			}
 		}
 
@@ -219,7 +266,19 @@ AFungiFieldsCharacter* UInventorySlotsWidget::GetPlayerCharacter() const
 {
 	if (APawn* OwningPawn = GetOwningPlayerPawn())
 	{
-		return Cast<AFungiFieldsCharacter>(OwningPawn);
+		AFungiFieldsCharacter* Character = Cast<AFungiFieldsCharacter>(OwningPawn);
+		return Character;
+	}
+	
+	if (UWorld* World = GetWorld())
+	{
+		if (APlayerController* PC = World->GetFirstPlayerController())
+		{
+			if (APawn* Pawn = PC->GetPawn())
+			{
+				return Cast<AFungiFieldsCharacter>(Pawn);
+			}
+		}
 	}
 	return nullptr;
 }
