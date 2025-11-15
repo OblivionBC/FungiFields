@@ -4,6 +4,7 @@
 #include "AbilitySystemComponent.h"
 #include "../Attributes/EconomyAttributeSet.h"
 #include "../Attributes/LevelAttributeSet.h"
+#include "FungiFields/Components/LevelComponent.h"
 
 void UPlayerHUDWidget::NativeOnInitialized()
 {
@@ -21,7 +22,8 @@ void UPlayerHUDWidget::BindToAttributeDelegates()
 	}
 
 	UAbilitySystemComponent* ASC = PlayerCharacter->GetAbilitySystemComponent();
-	if (!ASC || !PlayerCharacter->EconomyAttributeSet || !PlayerCharacter->LevelAttributeSet)
+	if (!ASC || !PlayerCharacter->EconomyAttributeSet || !PlayerCharacter->LevelComponent ||
+		!PlayerCharacter->LevelComponent->LevelAttributeSet)
 	{
 		return;
 	}
@@ -40,7 +42,7 @@ void UPlayerHUDWidget::BindToAttributeDelegates()
 		}
 	}
 
-	if (const ULevelAttributeSet* LevelAttributeSet = PlayerCharacter->LevelAttributeSet)
+	if (const ULevelAttributeSet* LevelAttributeSet = PlayerCharacter->LevelComponent->LevelAttributeSet)
 	{
 		ASC->GetGameplayAttributeValueChangeDelegate(LevelAttributeSet->GetLevelAttribute())
 			.AddUObject(this, &UPlayerHUDWidget::OnLevelUpdated);
@@ -49,6 +51,13 @@ void UPlayerHUDWidget::BindToAttributeDelegates()
 		if (LevelText)
 		{
 			LevelText->SetText(FText::AsNumber(FMath::FloorToInt(CurrentLevel)));
+		}
+
+		ASC->GetGameplayAttributeValueChangeDelegate(LevelAttributeSet->GetXPAttribute())
+			.AddUObject(this, &UPlayerHUDWidget::OnXPUpdated);
+		if (XPBar)
+		{
+			
 		}
 	}
 }
@@ -59,6 +68,19 @@ void UPlayerHUDWidget::OnGoldUpdated(const FOnAttributeChangeData& Data)
 	{
 		const int32 NewGoldAmount = FMath::FloorToInt(Data.NewValue);
 		GoldText->SetText(FText::AsNumber(NewGoldAmount));
+	}
+}
+
+void UPlayerHUDWidget::OnXPUpdated(const FOnAttributeChangeData& Data)
+{
+	if (XPBar) {
+		AFungiFieldsCharacter* PlayerCharacter = GetPlayerCharacter();
+		if (PlayerCharacter)
+		{
+			const float MaxXP = PlayerCharacter->LevelComponent->GetMaxXP();
+			const float XPPercent = MaxXP > 0.0f ? (Data.NewValue / MaxXP) : 0.0f;
+			XPBar->SetPercent(XPPercent);
+		}
 	}
 }
 

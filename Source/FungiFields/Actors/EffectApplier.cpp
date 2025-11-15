@@ -3,7 +3,8 @@
 #include "AbilitySystemInterface.h"
 #include "AbilitySystemComponent.h"
 #include "GameplayEffectTypes.h"
-
+#include "Containers/Map.h"
+#include "GameplayEffect.h"
 
 AEffectApplier::AEffectApplier()
 {
@@ -22,27 +23,38 @@ void AEffectApplier::Tick(float DeltaTime)
 
 void AEffectApplier::Interact_Implementation(AActor* Interactor)
 {
-	ApplyEffect(EffectClassToApply, Interactor);
+	if (!Interactor)
+		return;
+
+	if (IAbilitySystemInterface* TargetInterface = Cast<IAbilitySystemInterface>(Interactor))
+	{
+		if (UAbilitySystemComponent* TargetASC = TargetInterface->GetAbilitySystemComponent())
+		{
+			UGameplayEffect* GE = NewObject<UGameplayEffect>(GetTransientPackage(), TEXT("GE_TestDynamic"));
+
+			GE->DurationPolicy = EGameplayEffectDurationType::Instant;
+
+			int32 Idx = GE->Modifiers.AddDefaulted();
+			FGameplayModifierInfo& Info = GE->Modifiers[Idx];
+
+			Info.Attribute = Attribute;
+			Info.ModifierOp = Operation;
+			Info.ModifierMagnitude = FScalableFloat(Value);
+
+			FGameplayEffectContextHandle Context = TargetASC->MakeEffectContext();
+			Context.AddSourceObject(this);
+
+			FGameplayEffectSpecHandle Spec = TargetASC->MakeOutgoingSpec(GE->GetClass(), 1.0f, Context);
+
+			if (Spec.IsValid())
+			{
+				TargetASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+			}
+		}
+	}
 }
 
 FText AEffectApplier::GetInteractionText_Implementation()
 {
 	return FText::FromString("Press E to Interact");
-}
-
-void AEffectApplier::ApplyEffect_Implementation(TSubclassOf<class UGameplayEffect> EffectClass, AActor* Interactor)
-{
-	if (IAbilitySystemInterface* TargetInterface = Cast<IAbilitySystemInterface>(Interactor))
-	{
-		if (UAbilitySystemComponent* TargetASC = TargetInterface->GetAbilitySystemComponent())
-		{
-			FGameplayEffectContextHandle Context = TargetASC->MakeEffectContext();
-			FGameplayEffectSpecHandle SpecHandle = TargetASC->MakeOutgoingSpec(
-				EffectClass,
-				1.0f,
-				Context);
-			FActiveGameplayEffectHandle ActiveEffectHandle = TargetASC->ApplyGameplayEffectSpecToSelf(
-				*SpecHandle.Data.Get());
-		}
-	}
 }

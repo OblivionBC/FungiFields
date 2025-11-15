@@ -4,6 +4,7 @@
 #include "Blueprint/UserWidget.h"
 #include "AbilitySystemComponent.h"
 #include "GameplayEffectTypes.h"
+#include "Components/ProgressBar.h"
 #include "PlayerHUDWidget.generated.h"
 
 class UStatsBarWidget;
@@ -32,6 +33,9 @@ protected:
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> LevelText;
+	
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UProgressBar> XPBar;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UInventorySlotsWidget> InventoryDisplay;
@@ -40,7 +44,7 @@ protected:
 
 private:
 	void OnGoldUpdated(const FOnAttributeChangeData& Data);
-
+	void OnXPUpdated(const FOnAttributeChangeData& Data);
 	void OnLevelUpdated(const FOnAttributeChangeData& Data);
 
 	AFungiFieldsCharacter* GetPlayerCharacter() const;

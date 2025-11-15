@@ -16,6 +16,7 @@
 #include "../Attributes/LevelAttributeSet.h"
 #include "../Widgets/PlayerHUDWidget.h"
 #include "Blueprint/UserWidget.h"
+#include "FungiFields/Components/LevelComponent.h"
 #include "Misc/CoreMiscDefines.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
@@ -65,6 +66,9 @@ AFungiFieldsCharacter::AFungiFieldsCharacter()
 
 	// Create Ability System Component
 	AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
+
+	// Create Level Component
+	LevelComponent = CreateDefaultSubobject<ULevelComponent>(TEXT("LevelComponent"));
 }
 
 
@@ -77,38 +81,41 @@ void AFungiFieldsCharacter::BeginPlay()
 	if (AbilitySystemComponent)
 	{
 		AbilitySystemComponent->InitAbilityActorInfo(this, this);
-
+		
 		CharacterAttributeSet = NewObject<UCharacterAttributeSet>(this);
 		if (CharacterAttributeSet)
 		{
 			AbilitySystemComponent->AddAttributeSetSubobject(CharacterAttributeSet);
-			
-			CharacterAttributeSet->SetHealth(100.0f);
-			CharacterAttributeSet->SetMaxHealth(100.0f);
-			CharacterAttributeSet->SetStamina(100.0f);
-			CharacterAttributeSet->SetMaxStamina(100.0f);
-			CharacterAttributeSet->SetMagic(50.0f);
-			CharacterAttributeSet->SetMaxMagic(50.0f);
+
+			FGameplayEffectContextHandle Context = AbilitySystemComponent->MakeEffectContext();
+			FGameplayEffectSpecHandle SpecHandle = AbilitySystemComponent->MakeOutgoingSpec(InitialCharacterStatsGE, 1, Context);
+
+			if (SpecHandle.IsValid())
+			{
+				SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.Health")), 100.0f);
+				SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.MaxHealth")), 100.0f);
+				SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.Stamina")), 100.0f);
+				SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.MaxStamina")), 50.0f);
+				SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.MaxMagic")), 50.0f);
+				AbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+			}
 		}
 
 		EconomyAttributeSet = NewObject<UEconomyAttributeSet>(this);
 		if (EconomyAttributeSet)
 		{
 			AbilitySystemComponent->AddAttributeSetSubobject(EconomyAttributeSet);
-			
-			EconomyAttributeSet->SetGold(0.0f);
-			EconomyAttributeSet->SetMaxGold(999999.0f);
-		}
 
-		LevelAttributeSet = NewObject<ULevelAttributeSet>(this);
-		if (LevelAttributeSet)
-		{
-			AbilitySystemComponent->AddAttributeSetSubobject(LevelAttributeSet);
-			
-			LevelAttributeSet->SetLevel(1.0f);
-			LevelAttributeSet->SetMaxLevel(100.0f);
-		LevelAttributeSet->SetXP(0.0f);
-		LevelAttributeSet->SetMaxXP(100.0f);
+			FGameplayEffectContextHandle Context = AbilitySystemComponent->MakeEffectContext();
+			FGameplayEffectSpecHandle SpecHandle = AbilitySystemComponent->MakeOutgoingSpec(InitialEconomyStatsGE, 1, Context);
+
+			if (SpecHandle.IsValid())
+			{
+				SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.Gold")), 0.0f);
+				SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.MaxGold")), 9999999.0f);
+
+				AbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+			}
 		}
 	}
 

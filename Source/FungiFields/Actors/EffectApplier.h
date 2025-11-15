@@ -1,9 +1,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "AttributeSet.h"
+#include "GameplayEffectTypes.h"
 #include "FungiFields/Interfaces/InteractableInterface.h"
 #include "GameFramework/Actor.h"
 #include "EffectApplier.generated.h"
+
+TEnumAsByte<EGameplayModOp::Type>;
+struct FGameplayAttribute;
 
 UCLASS()
 class FUNGIFIELDS_API AEffectApplier : public AActor,  public IInteractableInterface
@@ -19,10 +24,6 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
-	// Called every frame
-
-	UPROPERTY(EditAnywhere, Category = "Effect")
-	TSubclassOf<class UGameplayEffect> EffectClassToApply;
 	
 	virtual void Tick(float DeltaTime) override;
 
@@ -30,6 +31,12 @@ public:
 	virtual void Interact_Implementation(AActor* Interactor) override;
 	virtual FText GetInteractionText_Implementation() override;
 
-	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	void ApplyEffect(TSubclassOf<class UGameplayEffect> EffectClass, AActor* Interactor);
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FGameplayAttribute Attribute;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Effect")
+	TEnumAsByte<EGameplayModOp::Type> Operation = EGameplayModOp::Additive;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float Value = 0.f;
 };

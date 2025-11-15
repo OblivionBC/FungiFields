@@ -17,8 +17,9 @@ class UInventoryComponent;
 class UAbilitySystemComponent;
 class UCharacterAttributeSet;
 class UEconomyAttributeSet;
-class ULevelAttributeSet;
 class UPlayerHUDWidget;
+class ULevelComponent;
+class UGameplayEffect;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
@@ -44,6 +45,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory", meta = (AllowPrivateAccess = "true"))
 	UInventoryComponent* InventoryComponent;
 
+	/** Level component for handling XP changes and Level Events */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory", meta = (AllowPrivateAccess = "true"))
+	ULevelComponent* LevelComponent;
+	
 	/** Ability System Component. Required to use Gameplay Attributes and Gameplay Abilities. */
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Abilities", meta = (AllowPrivateAccess = "true"))
 	UAbilitySystemComponent* AbilitySystemComponent;
@@ -56,10 +61,11 @@ public:
 	UPROPERTY()
 	UEconomyAttributeSet* EconomyAttributeSet;
 
-	/** Level Attribute Set containing Level and XP attributes. */
-	UPROPERTY()
-	ULevelAttributeSet* LevelAttributeSet;
-	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attributes", meta = (AllowPrivateAccess = "true"))
+	TSubclassOf<UGameplayEffect> InitialCharacterStatsGE;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attributes", meta = (AllowPrivateAccess = "true"))
+	TSubclassOf<UGameplayEffect> InitialEconomyStatsGE;
 	/** MappingContext */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputMappingContext* DefaultMappingContext;
