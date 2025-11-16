@@ -43,13 +43,10 @@ void AEffectApplier::Interact_Implementation(AActor* Interactor)
 
 			FGameplayEffectContextHandle Context = TargetASC->MakeEffectContext();
 			Context.AddSourceObject(this);
+			
+			FGameplayEffectSpec Spec(GE, Context, 1.0f);
 
-			FGameplayEffectSpecHandle Spec = TargetASC->MakeOutgoingSpec(GE->GetClass(), 1.0f, Context);
-
-			if (Spec.IsValid())
-			{
-				TargetASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
-			}
+			TargetASC->ApplyGameplayEffectSpecToSelf(Spec);
 		}
 	}
 }
