@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "AbilitySystemInterface.h"
+#include "FungiFields/Widgets/QuestMenu.h"
 #include "Logging/LogMacros.h"
 #include "FungiFieldsCharacter.generated.h"
 
@@ -20,6 +21,8 @@ class UEconomyAttributeSet;
 class UPlayerHUDWidget;
 class ULevelComponent;
 class UGameplayEffect;
+class UQuestComponent;
+class ULevelAttributeSet;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
@@ -41,6 +44,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Interaction", meta = (AllowPrivateAccess = "true"))
 	UInteractionComponent* InteractionComponent;
 
+	/** Interaction component for handling interactions with interactable actors */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Interaction", meta = (AllowPrivateAccess = "true"))
+	UQuestComponent* QuestComponent;
+	
 	/** Inventory component for managing player inventory */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory", meta = (AllowPrivateAccess = "true"))
 	UInventoryComponent* InventoryComponent;
@@ -61,11 +68,18 @@ public:
 	UPROPERTY()
 	UEconomyAttributeSet* EconomyAttributeSet;
 
+	UPROPERTY()
+	ULevelAttributeSet* LevelAttributeSet;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attributes", meta = (AllowPrivateAccess = "true"))
 	TSubclassOf<UGameplayEffect> InitialCharacterStatsGE;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attributes", meta = (AllowPrivateAccess = "true"))
 	TSubclassOf<UGameplayEffect> InitialEconomyStatsGE;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attributes", meta = (AllowPrivateAccess = "true"))
+	TSubclassOf<UGameplayEffect> InitialLevelStatsGE;
+	
 	/** MappingContext */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputMappingContext* DefaultMappingContext;
@@ -81,6 +95,10 @@ public:
 	/** Interact Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* InteractAction;
+
+	/** Toggle Quest Menu Input Action */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* ToggleQuestAction;
 	
 	/** Look Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
@@ -89,10 +107,20 @@ public:
 	/** HUD Widget class to create and display */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
 	TSubclassOf<UPlayerHUDWidget> HUDWidgetClass;
-
+	
+	/** Quest Menu Widget class to create and display */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
+	TSubclassOf<UQuestMenu> QuestMenuClass;
+	
 	/** Instance of the HUD widget */
 	UPROPERTY()
 	TObjectPtr<UPlayerHUDWidget> HUDWidget;
+
+	/** Instance of the Quest Menu widget */
+	UPROPERTY()
+	TObjectPtr<UQuestMenu> QuestMenuWidget;
+
+	bool bQuestMenuVisible = false;
 
 public:
 	AFungiFieldsCharacter();
@@ -103,6 +131,9 @@ protected:
 
 	/** Called for looking input */
 	void Look(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void ToggleQuestMenu(const FInputActionValue& Value);
 
 protected:
 	// APawn interface

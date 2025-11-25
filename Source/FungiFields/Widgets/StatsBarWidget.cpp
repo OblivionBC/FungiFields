@@ -33,7 +33,7 @@ void UStatsBarWidget::NativeConstruct()
 		BaseMagicBarWidth = MagicBar->GetDesiredSize().X;
 		if (BaseMagicBarWidth <= 0.0f)
 		{
-			BaseMagicBarWidth = BaseBarWidth;
+			BaseMagicBarWidth = BaseBarWidth / 2;
 		}
 	}
 

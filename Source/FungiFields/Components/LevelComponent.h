@@ -18,20 +18,26 @@ class FUNGIFIELDS_API ULevelComponent : public UActorComponent
 
 public:
 	ULevelComponent();
-	
-	/** Level Attribute Set containing Level and XP attributes. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Attributes", meta = (AllowPrivateAccess = "true"))
-	ULevelAttributeSet* LevelAttributeSet;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attributes", meta = (AllowPrivateAccess = "true"))
 	TSubclassOf<UGameplayEffect> InitialStatsGE;
-	float GetXP();
-	float GetMaxXP();
+	float GetXP() const;
+	float GetMaxXP() const;
 protected:
 	virtual void BeginPlay() override;
+
+	/** Cached Level Attribute Set containing Level and XP attributes. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Attributes", meta = (AllowPrivateAccess = "true"))
+	const ULevelAttributeSet* LevelAttributeSet;
+
+	/** Cached Ability System Component */
+	UPROPERTY()
+	UAbilitySystemComponent* ASC;
 	
 private:
 	/** Bind the level up delegates to functions */
-	void BindDelegates(UAbilitySystemComponent* ASC);
-	void CheckLevelUp(const FOnAttributeChangeData& Data);
+	void BindDelegates();
+	void CheckLevelUp(const FOnAttributeChangeData& Data) const;
+	void LevelUp(int Levels) const;
+	void LowerByMaxXP(int MaxXP) const;
 };

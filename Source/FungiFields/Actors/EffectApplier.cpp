@@ -16,11 +16,6 @@ void AEffectApplier::BeginPlay()
 	Super::BeginPlay();
 }
 
-void AEffectApplier::Tick(float DeltaTime)
-{
-	Super::Tick(DeltaTime);
-}
-
 void AEffectApplier::Interact_Implementation(AActor* Interactor)
 {
 	if (!Interactor)

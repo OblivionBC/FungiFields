@@ -137,19 +137,10 @@ void UInteractionComponent::ClearInteractable()
 	{
 		World->GetTimerManager().ClearTimer(InteractableResetTimer);
 	}
-	
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("Clearing Widget"));
-	}
 }
 
 void UInteractionComponent::ShowInteractionWidget(AActor* Interactable, const FText& Prompt)
 {
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("Showing Widget"));
-	}
 
 	UWorld* World = GetWorld();
 	if (!InteractionWidget && InteractionWidgetClass && World)

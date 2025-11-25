@@ -17,6 +17,7 @@
 #include "../Widgets/PlayerHUDWidget.h"
 #include "Blueprint/UserWidget.h"
 #include "FungiFields/Components/LevelComponent.h"
+#include "FungiFields/Components/QuestComponent.h"
 #include "Misc/CoreMiscDefines.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
@@ -58,35 +59,29 @@ AFungiFieldsCharacter::AFungiFieldsCharacter()
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName); // Attach the camera to the end of the boom and let the boom adjust to match the controller orientation
 	FollowCamera->bUsePawnControlRotation = false; // Camera does not rotate relative to arm
 
-	// Create interaction component
+	// Components
 	InteractionComponent = CreateDefaultSubobject<UInteractionComponent>(TEXT("InteractionComponent"));
-
-	// Create inventory component
 	InventoryComponent = CreateDefaultSubobject<UInventoryComponent>(TEXT("InventoryComponent"));
-
-	// Create Ability System Component
 	AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
-
-	// Create Level Component
+	QuestComponent = CreateDefaultSubobject<UQuestComponent>(TEXT("QuestComponent"));
 	LevelComponent = CreateDefaultSubobject<ULevelComponent>(TEXT("LevelComponent"));
+
+	// Attribute Sets
+	CharacterAttributeSet = CreateDefaultSubobject<UCharacterAttributeSet>(TEXT("CharacterAttributeSet"));
+	EconomyAttributeSet   = CreateDefaultSubobject<UEconomyAttributeSet>(TEXT("EconomyAttributeSet"));
+	LevelAttributeSet = CreateDefaultSubobject<ULevelAttributeSet>(TEXT("LevelAttributeSet"));
 }
-
-
 
 void AFungiFieldsCharacter::BeginPlay()
 {
-	// Call the base class  
 	Super::BeginPlay();
 
 	if (AbilitySystemComponent)
 	{
 		AbilitySystemComponent->InitAbilityActorInfo(this, this);
 		
-		CharacterAttributeSet = NewObject<UCharacterAttributeSet>(this);
-		if (CharacterAttributeSet)
+		if (InitialCharacterStatsGE)
 		{
-			AbilitySystemComponent->AddAttributeSetSubobject(CharacterAttributeSet);
-
 			FGameplayEffectContextHandle Context = AbilitySystemComponent->MakeEffectContext();
 			FGameplayEffectSpecHandle SpecHandle = AbilitySystemComponent->MakeOutgoingSpec(InitialCharacterStatsGE, 1, Context);
 
@@ -95,17 +90,15 @@ void AFungiFieldsCharacter::BeginPlay()
 				SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.Health")), 100.0f);
 				SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.MaxHealth")), 100.0f);
 				SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.Stamina")), 100.0f);
-				SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.MaxStamina")), 50.0f);
+				SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.MaxStamina")), 100.0f);
 				SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.MaxMagic")), 50.0f);
+				SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.Magic")), 50.0f);
 				AbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
 			}
 		}
 
-		EconomyAttributeSet = NewObject<UEconomyAttributeSet>(this);
-		if (EconomyAttributeSet)
+		if (InitialEconomyStatsGE)
 		{
-			AbilitySystemComponent->AddAttributeSetSubobject(EconomyAttributeSet);
-
 			FGameplayEffectContextHandle Context = AbilitySystemComponent->MakeEffectContext();
 			FGameplayEffectSpecHandle SpecHandle = AbilitySystemComponent->MakeOutgoingSpec(InitialEconomyStatsGE, 1, Context);
 
@@ -117,17 +110,44 @@ void AFungiFieldsCharacter::BeginPlay()
 				AbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
 			}
 		}
-	}
 
-	if (HUDWidgetClass && IsPlayerControlled())
-	{
-		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		if (InitialLevelStatsGE)
 		{
+			FGameplayEffectContextHandle Context = AbilitySystemComponent->MakeEffectContext();
+			FGameplayEffectSpecHandle SpecHandle = AbilitySystemComponent->MakeOutgoingSpec(InitialLevelStatsGE, 1, Context);
+
+			if (SpecHandle.IsValid())
+			{
+				SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.XP")), 0.0f);
+				SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.MaxXP")), 1000);
+				SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.Level")), 1);
+				SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.MaxLevel")), 100);
+
+				AbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+			}
+		}
+	}
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		if (HUDWidgetClass && IsPlayerControlled())
+		{
+
 			HUDWidget = CreateWidget<UPlayerHUDWidget>(GetWorld(), HUDWidgetClass);
 			if (HUDWidget)
 			{
 				HUDWidget->SetOwningPlayer(PC);
 				HUDWidget->AddToViewport();
+			}
+		}
+
+		if (QuestMenuClass)
+		{
+
+			QuestMenuWidget = CreateWidget<UQuestMenu>(GetWorld(), QuestMenuClass);
+			if (QuestMenuWidget)
+			{
+				QuestMenuWidget->SetOwningPlayer(PC);
+				QuestMenuWidget->AddToViewport();
 			}
 		}
 	}
@@ -175,6 +195,9 @@ void AFungiFieldsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 		{
 			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, InteractionComponent, &UInteractionComponent::Interact);
 		}
+
+		EnhancedInputComponent->BindAction(ToggleQuestAction, ETriggerEvent::Started, this, &AFungiFieldsCharacter::ToggleQuestMenu);
+		
 	}
 	else
 	{
@@ -215,5 +238,45 @@ void AFungiFieldsCharacter::Look(const FInputActionValue& Value)
 		// add yaw and pitch input to controller
 		AddControllerYawInput(LookAxisVector.X);
 		AddControllerPitchInput(LookAxisVector.Y);
+	}
+}
+
+void AFungiFieldsCharacter::ToggleQuestMenu(const FInputActionValue& Value)
+{
+	if (!QuestMenuClass) 
+	{
+		UE_LOG(LogTemp, Warning, TEXT("QuestMenuClass not set!"));
+		return;
+	}
+
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC)
+		return;
+
+	if (!bQuestMenuVisible)
+	{
+		if (!QuestMenuWidget)
+		{
+			QuestMenuWidget = CreateWidget<UQuestMenu>(PC, QuestMenuClass);
+		}
+
+		QuestMenuWidget->RefreshQuests();
+
+		QuestMenuWidget->AddToViewport();
+		bQuestMenuVisible = true;
+
+		FInputModeUIOnly Mode;
+		Mode.SetWidgetToFocus(QuestMenuWidget->TakeWidget());
+		PC->SetInputMode(Mode);
+		PC->bShowMouseCursor = true;
+	}
+	else
+	{
+		QuestMenuWidget->RemoveFromParent();
+		bQuestMenuVisible = false;
+
+		FInputModeGameOnly Mode;
+		PC->SetInputMode(Mode);
+		PC->bShowMouseCursor = false;
 	}
 }

@@ -2,4 +2,6 @@
 
 UEconomyAttributeSet::UEconomyAttributeSet()
 {
+	InitGold(0);
+	InitMaxGold(99999999);
 }

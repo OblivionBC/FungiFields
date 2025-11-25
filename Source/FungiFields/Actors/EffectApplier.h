@@ -7,7 +7,6 @@
 #include "GameFramework/Actor.h"
 #include "EffectApplier.generated.h"
 
-TEnumAsByte<EGameplayModOp::Type>;
 struct FGameplayAttribute;
 
 UCLASS()
@@ -24,8 +23,6 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
-	
-	virtual void Tick(float DeltaTime) override;
 
 	// Interaction interface
 	virtual void Interact_Implementation(AActor* Interactor) override;

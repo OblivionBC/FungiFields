@@ -18,34 +18,20 @@ ULevelComponent::ULevelComponent()
 void ULevelComponent::BeginPlay()
 {
 	Super::BeginPlay();
-	LevelAttributeSet = NewObject<ULevelAttributeSet>(this);
-	if (UAbilitySystemComponent * ASC = GetOwner()->FindComponentByClass<UAbilitySystemComponent>())
+	if (UAbilitySystemComponent * AbilitySystemComponent = GetOwner()->FindComponentByClass<UAbilitySystemComponent>())
 	{
-		if (LevelAttributeSet)
+		this->ASC = AbilitySystemComponent;
+		LevelAttributeSet = AbilitySystemComponent->GetSet<ULevelAttributeSet>();
+		if (!LevelAttributeSet)
 		{
-			ASC->AddAttributeSetSubobject(LevelAttributeSet);
-			
-			if (InitialStatsGE) 
-		  {
-				FGameplayEffectContextHandle Context = ASC->MakeEffectContext();
-				FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(InitialStatsGE, 1, Context);
-
-				if (SpecHandle.IsValid())
-				{
-					SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.Level")), 1);
-					SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.MaxLevel")), 100);
-					SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.XP")), 0);
-					SpecHandle.Data->SetSetByCallerMagnitude(FGameplayTag::RequestGameplayTag(TEXT("Data.MaxXP")), 100);
-
-					ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
-				}
-		  }
+			UE_LOG(LogTemp, Error, TEXT("LevelComponent: LevelAttributeSet missing!"));
+			return;
 		}
-		BindDelegates(ASC);
+		BindDelegates();
 	}
 }
 
-float ULevelComponent::GetXP()
+float ULevelComponent::GetXP() const
 {
 	if (LevelAttributeSet)
 	{
@@ -54,7 +40,7 @@ float ULevelComponent::GetXP()
 	return 0;
 }
 
-float ULevelComponent::GetMaxXP()
+float ULevelComponent::GetMaxXP() const
 {
 	if (LevelAttributeSet)
 	{
@@ -63,29 +49,51 @@ float ULevelComponent::GetMaxXP()
 	return 0;
 }
 
-void ULevelComponent::BindDelegates(UAbilitySystemComponent * ASC)
+void ULevelComponent::BindDelegates()
 {
-	ASC->GetGameplayAttributeValueChangeDelegate(LevelAttributeSet->GetLevelAttribute())
+	ASC->GetGameplayAttributeValueChangeDelegate(LevelAttributeSet->GetXPAttribute())
 			.AddUObject(this, &ULevelComponent::CheckLevelUp);
 }
 
-void ULevelComponent::CheckLevelUp(const FOnAttributeChangeData& Data)
+void ULevelComponent::CheckLevelUp(const FOnAttributeChangeData& Data) const
 {
-	if (!LevelAttributeSet)
+	if (!LevelAttributeSet || !ASC)
 	{
 		return;
 	}
 	float MaxXP = LevelAttributeSet->GetMaxXP();
 	float CurrXP = LevelAttributeSet->GetXP();
 	int Levels = 0;
+	
 	while (CurrXP >=  MaxXP)
 	{
 		CurrXP -= MaxXP;
-		LevelAttributeSet->SetXP(CurrXP);
+		LowerByMaxXP(MaxXP);
 		MaxXP = LevelAttributeSet->GetMaxXP();
 		Levels++;
 	}
-	LevelAttributeSet->SetLevel(LevelAttributeSet->GetLevel() + Levels);
+	if (Levels > 0)
+	{
+		LevelUp(Levels);
+	}
+}
+
+void ULevelComponent::LevelUp(int Levels) const
+{
+	ASC->ApplyModToAttribute(
+		ULevelAttributeSet::GetLevelAttribute(),
+		EGameplayModOp::Additive,
+		Levels
+	);
+}
+
+void ULevelComponent::LowerByMaxXP(int MaxXP) const
+{
+	ASC->ApplyModToAttribute(
+		ULevelAttributeSet::GetXPAttribute(),
+		EGameplayModOp::Additive,
+		-MaxXP
+	);
 }
 
 

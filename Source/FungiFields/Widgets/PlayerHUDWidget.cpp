@@ -23,7 +23,7 @@ void UPlayerHUDWidget::BindToAttributeDelegates()
 
 	UAbilitySystemComponent* ASC = PlayerCharacter->GetAbilitySystemComponent();
 	if (!ASC || !PlayerCharacter->EconomyAttributeSet || !PlayerCharacter->LevelComponent ||
-		!PlayerCharacter->LevelComponent->LevelAttributeSet)
+		!PlayerCharacter->LevelAttributeSet)
 	{
 		return;
 	}
@@ -42,7 +42,7 @@ void UPlayerHUDWidget::BindToAttributeDelegates()
 		}
 	}
 
-	if (const ULevelAttributeSet* LevelAttributeSet = PlayerCharacter->LevelComponent->LevelAttributeSet)
+	if (const ULevelAttributeSet* LevelAttributeSet = PlayerCharacter->LevelAttributeSet)
 	{
 		ASC->GetGameplayAttributeValueChangeDelegate(LevelAttributeSet->GetLevelAttribute())
 			.AddUObject(this, &UPlayerHUDWidget::OnLevelUpdated);
