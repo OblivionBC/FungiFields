@@ -1,5 +1,10 @@
 #include "InventoryComponent.h"
 #include "../Data/UItemDataAsset.h"
+#include "Components/StaticMeshComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "GameFramework/Character.h"
+
+struct FInputActionValue;
 
 UInventoryComponent::UInventoryComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -97,24 +102,95 @@ bool UInventoryComponent::AddToNewSlot(UItemDataAsset* ItemToAdd, int32 Amount)
 
 void UInventoryComponent::BroadcastUpdate()
 {
+	// Update equipped item mesh if equipped slot might have changed
+	UpdateEquippedItemMesh();
 	OnInventoryChanged.Broadcast();
 }
 
-bool UInventoryComponent::EquipSlot(int32 SlotIndex)
+void UInventoryComponent::UpdateEquippedItemMesh()
+{
+	AActor* Owner = GetOwner();
+	if (!Owner)
+	{
+		return;
+	}
+
+	// Get character mesh for socket attachment
+	ACharacter* CharacterOwner = Cast<ACharacter>(Owner);
+	if (!CharacterOwner)
+	{
+		return;
+	}
+
+	USkeletalMeshComponent* CharacterMesh = CharacterOwner->GetMesh();
+	if (!CharacterMesh)
+	{
+		return;
+	}
+
+	// Remove existing equipped item mesh
+	if (EquippedItemMeshComponent)
+	{
+		EquippedItemMeshComponent->DestroyComponent();
+		EquippedItemMeshComponent = nullptr;
+	}
+
+	// Check if we have an equipped slot
+	if (CurrentEquippedSlotIndex == INDEX_NONE)
+	{
+		return;
+	}
+
+	// Check if slot is valid
+	if (!InventorySlots.IsValidIndex(CurrentEquippedSlotIndex))
+	{
+		return;
+	}
+
+	const FInventorySlot& EquippedSlot = InventorySlots[CurrentEquippedSlotIndex];
+	if (EquippedSlot.IsEmpty() || !EquippedSlot.ItemDefinition)
+	{
+		return;
+	}
+
+	// Check if item has a mesh
+	UStaticMesh* ItemMesh = EquippedSlot.ItemDefinition->ItemMesh.LoadSynchronous();
+	if (!ItemMesh)
+	{
+		return;
+	}
+
+	// Create static mesh component for the equipped item
+	EquippedItemMeshComponent = NewObject<UStaticMeshComponent>(Owner, UStaticMeshComponent::StaticClass(), TEXT("EquippedItemMesh"));
+	if (!EquippedItemMeshComponent)
+	{
+		return;
+	}
+
+	// Register and initialize the component
+	EquippedItemMeshComponent->RegisterComponent();
+	EquippedItemMeshComponent->SetStaticMesh(ItemMesh);
+	EquippedItemMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	EquippedItemMeshComponent->SetGenerateOverlapEvents(false);
+
+	// Attach to character mesh at RightHandItemSlot socket
+	EquippedItemMeshComponent->AttachToComponent(
+		CharacterMesh,
+		FAttachmentTransformRules::SnapToTargetNotIncludingScale,
+		FName("RightHandItemSlot")
+	);
+}
+
+void UInventoryComponent::EquipSlot(const FInputActionValue& Value, int32 SlotIndex)
 {
 	const int32 HotbarSize = 9;
 	
-	if (SlotIndex < 0 || SlotIndex >= HotbarSize)
+	if (SlotIndex < 0 || SlotIndex >= HotbarSize || SlotIndex >= InventorySlots.Num())
 	{
-		return false;
-	}
-
-	if (SlotIndex >= InventorySlots.Num())
-	{
-		return false;
+		return;
 	}
 
 	CurrentEquippedSlotIndex = SlotIndex;
+	UpdateEquippedItemMesh();
 	BroadcastUpdate();
-	return true;
 }

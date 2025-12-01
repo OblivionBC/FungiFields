@@ -22,7 +22,12 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties", meta = (ClampMin = "1"))
 	int32 MaxStackSize = 1;
 
+	/** Image to display in Inventory and Hotbar */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties")
 	TSoftObjectPtr<UTexture2D> ItemIcon;
+
+	/** Mesh to display when item is equipped (attached to RightHandItemSlot socket) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties")
+	TSoftObjectPtr<UStaticMesh> ItemMesh;
 };
 

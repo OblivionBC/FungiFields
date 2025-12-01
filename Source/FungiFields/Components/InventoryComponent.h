@@ -5,7 +5,9 @@
 #include "../Inventory/FInventorySlot.h"
 #include "InventoryComponent.generated.h"
 
+struct FInputActionValue;
 class UItemDataAsset;
+class UStaticMeshComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnInventoryChanged);
 
@@ -31,7 +33,7 @@ public:
 	const TArray<FInventorySlot>& GetInventorySlots() const { return InventorySlots; }
 
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	bool EquipSlot(int32 SlotIndex);
+	void EquipSlot(const FInputActionValue& Value, int32 SlotIndex);
 
 	UFUNCTION(BlueprintPure, Category = "Inventory")
 	int32 GetEquippedSlot() const { return CurrentEquippedSlotIndex; }
@@ -57,5 +59,13 @@ private:
 	bool AddToNewSlot(UItemDataAsset* ItemToAdd, int32 Amount);
 
 	void BroadcastUpdate();
+
+	/**
+	 * Attaches or removes mesh based on equipped item.
+	 */
+	void UpdateEquippedItemMesh();
+
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> EquippedItemMeshComponent;
 };
 

@@ -18,6 +18,7 @@
 #include "Blueprint/UserWidget.h"
 #include "FungiFields/Components/LevelComponent.h"
 #include "FungiFields/Components/QuestComponent.h"
+#include "FungiFields/Components/UFarmingComponent.h"
 #include "Misc/CoreMiscDefines.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
@@ -65,6 +66,7 @@ AFungiFieldsCharacter::AFungiFieldsCharacter()
 	AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
 	QuestComponent = CreateDefaultSubobject<UQuestComponent>(TEXT("QuestComponent"));
 	LevelComponent = CreateDefaultSubobject<ULevelComponent>(TEXT("LevelComponent"));
+	FarmingComponent = CreateDefaultSubobject<UFarmingComponent>(TEXT("FarmingComponent"));
 
 	// Attribute Sets
 	CharacterAttributeSet = CreateDefaultSubobject<UCharacterAttributeSet>(TEXT("CharacterAttributeSet"));
@@ -148,14 +150,27 @@ void AFungiFieldsCharacter::BeginPlay()
 			{
 				QuestMenuWidget->SetOwningPlayer(PC);
 				QuestMenuWidget->AddToViewport();
+				QuestMenuWidget->SetVisibility(ESlateVisibility::Hidden);
+				QuestMenuWidget->OnQuestMenuClosed.AddDynamic(this, &AFungiFieldsCharacter::OnQuestMenuClosed);
 			}
 		}
 	}
 
-	// Initialize interaction component with camera reference
-	if (InteractionComponent && FollowCamera)
+	if (FollowCamera)
 	{
-		InteractionComponent->SetCamera(FollowCamera);
+		if (InteractionComponent)
+		{
+			InteractionComponent->SetCamera(FollowCamera);
+		}
+
+		if (FarmingComponent)
+		{
+			FarmingComponent->SetCamera(FollowCamera);
+			if (InventoryComponent)
+			{
+				InventoryComponent->OnInventoryChanged.AddDynamic(FarmingComponent, &UFarmingComponent::UpdateEquippedTool);
+			}
+		}
 	}
 }
 
@@ -195,9 +210,35 @@ void AFungiFieldsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 		{
 			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, InteractionComponent, &UInteractionComponent::Interact);
 		}
-
-		EnhancedInputComponent->BindAction(ToggleQuestAction, ETriggerEvent::Started, this, &AFungiFieldsCharacter::ToggleQuestMenu);
 		
+		if (FarmingComponent)
+		{
+			EnhancedInputComponent->BindAction(UseToolAction, ETriggerEvent::Started, FarmingComponent, &UFarmingComponent::UseEquippedTool);
+		}
+		
+		EnhancedInputComponent->BindAction(ToggleQuestAction, ETriggerEvent::Started, this, &AFungiFieldsCharacter::ToggleQuestMenu);
+
+		if (InventoryComponent)
+		{
+			EnhancedInputComponent->BindAction(EquipSlot1Action, ETriggerEvent::Started, 
+				InventoryComponent, &UInventoryComponent::EquipSlot, 0);
+			EnhancedInputComponent->BindAction(EquipSlot2Action, ETriggerEvent::Started, 
+				InventoryComponent, &UInventoryComponent::EquipSlot, 1);
+			EnhancedInputComponent->BindAction(EquipSlot3Action, ETriggerEvent::Started, 
+				InventoryComponent, &UInventoryComponent::EquipSlot, 2);
+			EnhancedInputComponent->BindAction(EquipSlot4Action, ETriggerEvent::Started, 
+				InventoryComponent, &UInventoryComponent::EquipSlot, 3);
+			EnhancedInputComponent->BindAction(EquipSlot5Action, ETriggerEvent::Started, 
+				InventoryComponent, &UInventoryComponent::EquipSlot, 4);
+			EnhancedInputComponent->BindAction(EquipSlot6Action, ETriggerEvent::Started, 
+				InventoryComponent, &UInventoryComponent::EquipSlot, 5);
+			EnhancedInputComponent->BindAction(EquipSlot7Action, ETriggerEvent::Started, 
+				InventoryComponent, &UInventoryComponent::EquipSlot, 6);
+			EnhancedInputComponent->BindAction(EquipSlot8Action, ETriggerEvent::Started, 
+				InventoryComponent, &UInventoryComponent::EquipSlot, 7);
+			EnhancedInputComponent->BindAction(EquipSlot9Action, ETriggerEvent::Started, 
+				InventoryComponent, &UInventoryComponent::EquipSlot, 8);
+		}
 	}
 	else
 	{
@@ -255,14 +296,8 @@ void AFungiFieldsCharacter::ToggleQuestMenu(const FInputActionValue& Value)
 
 	if (!bQuestMenuVisible)
 	{
-		if (!QuestMenuWidget)
-		{
-			QuestMenuWidget = CreateWidget<UQuestMenu>(PC, QuestMenuClass);
-		}
-
 		QuestMenuWidget->RefreshQuests();
-
-		QuestMenuWidget->AddToViewport();
+		QuestMenuWidget->SetVisibility(ESlateVisibility::Visible);
 		bQuestMenuVisible = true;
 
 		FInputModeUIOnly Mode;
@@ -272,11 +307,27 @@ void AFungiFieldsCharacter::ToggleQuestMenu(const FInputActionValue& Value)
 	}
 	else
 	{
-		QuestMenuWidget->RemoveFromParent();
+		QuestMenuWidget->SetVisibility(ESlateVisibility::Hidden);
 		bQuestMenuVisible = false;
-
 		FInputModeGameOnly Mode;
 		PC->SetInputMode(Mode);
 		PC->bShowMouseCursor = false;
 	}
+}
+
+void AFungiFieldsCharacter::OnQuestMenuClosed()
+{
+	if (!QuestMenuWidget)
+		return;
+
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC)
+		return;
+
+	QuestMenuWidget->SetVisibility(ESlateVisibility::Hidden);
+	bQuestMenuVisible = false;
+
+	FInputModeGameOnly Mode;
+	PC->SetInputMode(Mode);
+	PC->bShowMouseCursor = false;
 }
