@@ -35,6 +35,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void EquipSlot(const FInputActionValue& Value, int32 SlotIndex);
 
+	/**
+	 * Consume items from a specific inventory slot.
+	 * Intended to be called on the server in a multiplayer scenario.
+	 * @param SlotIndex Index of the slot to consume from
+	 * @param Amount Number of items to consume
+	 * @return True if any items were consumed
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	bool ConsumeFromSlot(int32 SlotIndex, int32 Amount);
+
 	UFUNCTION(BlueprintPure, Category = "Inventory")
 	int32 GetEquippedSlot() const { return CurrentEquippedSlotIndex; }
 

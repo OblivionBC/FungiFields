@@ -3,6 +3,7 @@
 #include "../Components/InventoryComponent.h"
 #include "../Inventory/FInventorySlot.h"
 #include "../Data/UToolDataAsset.h"
+#include "../Data/USeedDataAsset.h"
 #include "../Interfaces/IFarmableInterface.h"
 #include "../Interfaces/IHarvestableInterface.h"
 #include "../Data/FHarvestResult.h"
@@ -18,6 +19,9 @@ UFarmingComponent::UFarmingComponent(const FObjectInitializer& ObjectInitializer
 	CurrentToolType = EToolType::Hoe;
 	CurrentToolPower = 1.0f;
 	bHasValidTool = false;
+	bHasSeedEquipped = false;
+	EquippedSeedData = nullptr;
+	EquippedSlotIndexCached = INDEX_NONE;
 }
 
 void UFarmingComponent::BeginPlay()
@@ -34,12 +38,6 @@ void UFarmingComponent::SetCamera(UCameraComponent* Camera)
 
 void UFarmingComponent::UseEquippedTool(const FInputActionValue& Value)
 {
-	// No-op if no valid tool is equipped
-	if (!bHasValidTool)
-	{
-		return;
-	}
-
 	if (!CameraComponent)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("UFarmingComponent::UseEquippedTool: CameraComponent is null!"));
@@ -55,6 +53,33 @@ void UFarmingComponent::UseEquippedTool(const FInputActionValue& Value)
 
 	AActor* HitActor = HitResult.GetActor();
 	if (!HitActor)
+	{
+		return;
+	}
+
+	// if a seed is equipped and we're looking at farmable soil, try to plant.
+	if (bHasSeedEquipped && EquippedSeedData && EquippedSeedData->CropToPlant && HitActor->Implements<UFarmableInterface>())
+	{
+		if (IFarmableInterface::Execute_CanAcceptSeed(HitActor))
+		{
+			if (IFarmableInterface::Execute_PlantSeed(HitActor, EquippedSeedData->CropToPlant, GetOwner()))
+			{
+				if (UInventoryComponent* InventoryComp = GetOwner()->FindComponentByClass<UInventoryComponent>())
+				{
+					// Consume one seed from the equipped slot on the authoritative inventory owner.
+					if (InventoryComp->ConsumeFromSlot(EquippedSlotIndexCached, 1))
+					{
+						// Re-evaluate equipped state after inventory change.
+						UpdateEquippedTool();
+					}
+				}
+				// Plant Stamina Usage here in future
+				return;
+			}
+		}
+	}
+
+	if (!bHasValidTool)
 	{
 		return;
 	}
@@ -136,45 +161,41 @@ void UFarmingComponent::SetEquippedTool(EToolType ToolType, float ToolPower)
 
 void UFarmingComponent::UpdateEquippedTool()
 {
+	bHasValidTool = false;
+	bHasSeedEquipped = false;
+	EquippedSeedData = nullptr;
+	EquippedSlotIndexCached = INDEX_NONE;
+
 	if (!GetOwner())
 	{
-		bHasValidTool = false;
 		return;
 	}
 
 	UInventoryComponent* InventoryComp = GetOwner()->FindComponentByClass<UInventoryComponent>();
 	if (!InventoryComp)
 	{
-		bHasValidTool = false;
 		return;
 	}
 
-	int32 EquippedSlotIndex = InventoryComp->GetEquippedSlot();
+	const int32 EquippedSlotIndex = InventoryComp->GetEquippedSlot();
 	if (EquippedSlotIndex == INDEX_NONE)
 	{
-		// No slot equipped
-		bHasValidTool = false;
-		CurrentToolType = EToolType::Hoe;
-		CurrentToolPower = 1.0f;
 		return;
 	}
 
 	const TArray<FInventorySlot>& Slots = InventoryComp->GetInventorySlots();
 	if (!Slots.IsValidIndex(EquippedSlotIndex))
 	{
-		bHasValidTool = false;
 		return;
 	}
 
 	const FInventorySlot& EquippedSlot = Slots[EquippedSlotIndex];
 	if (EquippedSlot.IsEmpty())
 	{
-		// Slot is empty
-		bHasValidTool = false;
-		CurrentToolType = EToolType::Hoe;
-		CurrentToolPower = 1.0f;
 		return;
 	}
+
+	EquippedSlotIndexCached = EquippedSlotIndex;
 
 	// Check if equipped item is a tool
 	if (const UToolDataAsset* ToolData = Cast<const UToolDataAsset>(EquippedSlot.ItemDefinition))
@@ -184,13 +205,16 @@ void UFarmingComponent::UpdateEquippedTool()
 		CurrentToolType = ToolData->ToolType;
 		CurrentToolPower = ToolData->ToolPower;
 		ToolTraceDistance = ToolData->ToolRange;
+		return;
 	}
-	else
+
+	if (USeedDataAsset* SeedData = const_cast<USeedDataAsset*>(Cast<const USeedDataAsset>(EquippedSlot.ItemDefinition)))
 	{
-		// Item is not a tool - no-op
-		bHasValidTool = false;
-		CurrentToolType = EToolType::Hoe; // Keep for display purposes, but won't be used
-		CurrentToolPower = 1.0f;
+		if (SeedData->CropToPlant)
+		{
+			bHasSeedEquipped = true;
+			EquippedSeedData = SeedData;
+		}
 	}
 }
 

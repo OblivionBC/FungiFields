@@ -9,6 +9,7 @@ class UCameraComponent;
 class UInventoryComponent;
 class UCharacterAttributeSet;
 class UToolDataAsset;
+class USeedDataAsset;
 struct FInputActionValue;
 
 /**
@@ -110,6 +111,18 @@ private:
 	/** Whether a valid tool is currently equipped */
 	UPROPERTY(VisibleAnywhere, Category = "Farming Data")
 	bool bHasValidTool = false;
+
+	/** Whether a valid seed is currently equipped */
+	UPROPERTY(VisibleAnywhere, Category = "Farming Data")
+	bool bHasSeedEquipped = false;
+
+	/** Data asset for the currently equipped seed (if any) */
+	UPROPERTY()
+	TObjectPtr<USeedDataAsset> EquippedSeedData = nullptr;
+
+	/** Cached index of the inventory slot used for the equipped tool/seed */
+	UPROPERTY()
+	int32 EquippedSlotIndexCached = INDEX_NONE;
 
 	/** Maximum distance for tool interaction */
 	UPROPERTY(EditAnywhere, Category = "Farming Settings", meta = (ClampMin = "0.0"))

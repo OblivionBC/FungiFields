@@ -54,7 +54,7 @@ void ACropBase::Initialize(UCropDataAsset* InCropData, ASoilPlot* InParentSoil)
 	GrowthComponent->Initialize(InCropData, InParentSoil);
 
 	// Load and set initial mesh (0% growth)
-	if (InCropData->GrowthMeshes.Num() > 0 && InCropData->GrowthMeshes[0].IsValid())
+	if (InCropData->GrowthMeshes.Num() > 0)
 	{
 		UStaticMesh* LoadedMesh = InCropData->GrowthMeshes[0].LoadSynchronous();
 		if (LoadedMesh)

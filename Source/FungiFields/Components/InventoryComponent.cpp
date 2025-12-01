@@ -194,3 +194,45 @@ void UInventoryComponent::EquipSlot(const FInputActionValue& Value, int32 SlotIn
 	UpdateEquippedItemMesh();
 	BroadcastUpdate();
 }
+
+bool UInventoryComponent::ConsumeFromSlot(int32 SlotIndex, int32 Amount)
+{
+	// This function is intended to run on the server in a multiplayer scenario.
+	if (Amount <= 0)
+	{
+		return false;
+	}
+
+	if (!InventorySlots.IsValidIndex(SlotIndex))
+	{
+		return false;
+	}
+
+	FInventorySlot& Slot = InventorySlots[SlotIndex];
+	if (Slot.IsEmpty())
+	{
+		return false;
+	}
+
+	const int32 OriginalCount = Slot.Count;
+	Slot.Count = FMath::Max(0, Slot.Count - Amount);
+
+	if (Slot.Count == 0)
+	{
+		Slot.ItemDefinition = nullptr;
+	}
+
+	if (Slot.Count == OriginalCount)
+	{
+		return false;
+	}
+
+	// If the consumed slot is equipped, ensure visuals/state are refreshed.
+	if (CurrentEquippedSlotIndex == SlotIndex)
+	{
+		UpdateEquippedItemMesh();
+	}
+
+	BroadcastUpdate();
+	return true;
+}

@@ -13,7 +13,7 @@ USoilComponent::USoilComponent(const FObjectInitializer& ObjectInitializer)
 	WaterEvaporationRate = 1.0f;
 	EvaporationCheckInterval = 1.0f;
 	TillProgress = 0.0f;
-	TillThreshold = 0.0f;q
+	TillThreshold = 0.0f;
 }
 
 void USoilComponent::BeginPlay()
