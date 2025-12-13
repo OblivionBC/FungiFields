@@ -50,3 +50,8 @@ FText AEffectApplier::GetInteractionText_Implementation()
 {
 	return FText::FromString("Press E to Interact");
 }
+
+FText AEffectApplier::GetTooltipText_Implementation() const
+{
+	return FText::FromString("Press E to Interact");
+}

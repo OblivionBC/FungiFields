@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "UItemDataAsset.h"
+#include "NiagaraSystem.h"
+#include "Particles/ParticleSystem.h"
 #include "UCropDataAsset.generated.h"
 
 /**
@@ -44,4 +46,12 @@ public:
 	/** Mesh when crop wilts from lack of water */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Crop Visuals")
 	TSoftObjectPtr<UStaticMesh> WitheredMesh;
+
+	/** Particle effect to spawn when harvesting this crop (Niagara) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Crop Visuals")
+	TObjectPtr<UNiagaraSystem> HarvestParticleEffect;
+
+	/** Particle effect to spawn when harvesting this crop (Cascade - legacy) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Crop Visuals")
+	TObjectPtr<UParticleSystem> HarvestParticleEffectCascade;
 };

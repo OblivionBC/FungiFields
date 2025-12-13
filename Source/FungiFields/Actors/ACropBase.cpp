@@ -8,8 +8,12 @@
 #include "../Data/FHarvestResult.h"
 #include "../Data/UItemDataAsset.h"
 #include "../Actors/ItemPickup.h"
+#include "../Interfaces/ITooltipProvider.h"
 #include "Engine/World.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "NiagaraFunctionLibrary.h"
+#include "Particles/ParticleSystem.h"
+#include "Kismet/GameplayStatics.h"
 
 ACropBase::ACropBase()
 {
@@ -118,6 +122,36 @@ FHarvestResult ACropBase::Harvest_Implementation(AActor* Harvester, float ToolPo
 			}
 		}
 
+		// Spawn harvest particles before destroying
+		if (CropDataAsset && GetWorld())
+		{
+			FVector SpawnLocation = GetActorLocation();
+			SpawnLocation.Z += 10.0f; // Slightly above ground
+
+			if (CropDataAsset->HarvestParticleEffect)
+			{
+				UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+					GetWorld(),
+					CropDataAsset->HarvestParticleEffect,
+					SpawnLocation,
+					FRotator::ZeroRotator,
+					FVector::OneVector,
+					true,
+					true
+				);
+			}
+			else if (CropDataAsset->HarvestParticleEffectCascade)
+			{
+				UGameplayStatics::SpawnEmitterAtLocation(
+					GetWorld(),
+					CropDataAsset->HarvestParticleEffectCascade,
+					SpawnLocation,
+					FRotator::ZeroRotator,
+					true
+				);
+			}
+		}
+
 		// Remove crop from soil
 		if (USoilComponent* SoilComp = ParentSoil->FindComponentByClass<USoilComponent>())
 		{
@@ -152,6 +186,29 @@ FText ACropBase::GetHarvestText_Implementation() const
 	}
 
 	return FText::FromString("Harvest");
+}
+
+FText ACropBase::GetTooltipText_Implementation() const
+{
+	return GetHarvestText_Implementation();
+}
+
+FVector ACropBase::GetActionLocation_Implementation() const
+{
+	// Return the center of the crop, slightly above ground
+	FVector Location = GetActorLocation();
+	if (MeshComponent)
+	{
+		FBoxSphereBounds Bounds = MeshComponent->CalcBounds(MeshComponent->GetComponentTransform());
+		Location.Z = Bounds.Origin.Z + Bounds.BoxExtent.Z * 0.5f;
+	}
+	return Location;
+}
+
+float ACropBase::GetInteractionRange_Implementation() const
+{
+	// Default interaction range for crops
+	return 100.0f;
 }
 
 void ACropBase::OnGrowthStageChanged(AActor* Crop, float Progress)

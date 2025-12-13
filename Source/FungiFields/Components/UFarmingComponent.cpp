@@ -4,24 +4,34 @@
 #include "../Inventory/FInventorySlot.h"
 #include "../Data/UToolDataAsset.h"
 #include "../Data/USeedDataAsset.h"
+#include "../Data/UCropDataAsset.h"
+#include "../Actors/ACropBase.h"
 #include "../Interfaces/IFarmableInterface.h"
 #include "../Interfaces/IHarvestableInterface.h"
 #include "../Data/FHarvestResult.h"
 #include "../Attributes/CharacterAttributeSet.h"
+#include "../Interfaces/ITooltipProvider.h"
+#include "../Widgets/InteractionWidget.h"
 #include "AbilitySystemInterface.h"
 #include "Engine/World.h"
 #include "DrawDebugHelpers.h"
+#include "Blueprint/UserWidget.h"
 
 UFarmingComponent::UFarmingComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.TickGroup = TG_PrePhysics;
 	CurrentToolType = EToolType::Hoe;
 	CurrentToolPower = 1.0f;
 	bHasValidTool = false;
 	bHasSeedEquipped = false;
 	EquippedSeedData = nullptr;
 	EquippedSlotIndexCached = INDEX_NONE;
+	LastFarmableTarget = nullptr;
+	FarmingTooltipWidget = nullptr;
+	TooltipTraceDistance = 800.0f;
+	TooltipClearDelay = 3.0f;
 }
 
 void UFarmingComponent::BeginPlay()
@@ -29,6 +39,12 @@ void UFarmingComponent::BeginPlay()
 	Super::BeginPlay();
 
 	UpdateEquippedTool();
+}
+
+void UFarmingComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	TraceForFarmable();
 }
 
 void UFarmingComponent::SetCamera(UCameraComponent* Camera)
@@ -57,76 +73,62 @@ void UFarmingComponent::UseEquippedTool(const FInputActionValue& Value)
 		return;
 	}
 
-	// if a seed is equipped and we're looking at farmable soil, try to plant.
-	if (bHasSeedEquipped && EquippedSeedData && EquippedSeedData->CropToPlant && HitActor->Implements<UFarmableInterface>())
+	// Use the location-based execution method
+	FVector ActionLocation = HitResult.Location;
+	USeedDataAsset* SeedData = bHasSeedEquipped ? EquippedSeedData : nullptr;
+	EToolType ToolType = bHasValidTool ? CurrentToolType : EToolType::None;
+	float ToolPower = bHasValidTool ? CurrentToolPower : 1.0f;
+
+	ExecuteFarmingAction(HitActor, ActionLocation, ToolType, ToolPower, SeedData);
+}
+
+bool UFarmingComponent::ExecuteFarmingAction(AActor* TargetActor, const FVector& ActionLocation, EToolType ToolType, float ToolPower, USeedDataAsset* SeedData)
+{
+	if (!TargetActor)
 	{
-		if (IFarmableInterface::Execute_CanAcceptSeed(HitActor))
-		{
-			if (IFarmableInterface::Execute_PlantSeed(HitActor, EquippedSeedData->CropToPlant, GetOwner()))
-			{
-				if (UInventoryComponent* InventoryComp = GetOwner()->FindComponentByClass<UInventoryComponent>())
-				{
-					// Consume one seed from the equipped slot on the authoritative inventory owner.
-					if (InventoryComp->ConsumeFromSlot(EquippedSlotIndexCached, 1))
-					{
-						// Re-evaluate equipped state after inventory change.
-						UpdateEquippedTool();
-					}
-				}
-				// Plant Stamina Usage here in future
-				return;
-			}
-		}
+		return false;
 	}
 
-	if (!bHasValidTool)
+	// Handle seed planting
+	if (SeedData && SeedData->CropToPlant && TargetActor->Implements<UFarmableInterface>())
 	{
-		return;
+		if (IFarmableInterface::Execute_CanAcceptSeed(TargetActor))
+		{
+			if (IFarmableInterface::Execute_PlantSeed(TargetActor, SeedData->CropToPlant.Get(), GetOwner()))
+			{
+				// Consume seed from inventory if available (only for players with inventory)
+				if (UInventoryComponent* InventoryComp = GetOwner()->FindComponentByClass<UInventoryComponent>())
+				{
+					InventoryComp->ConsumeFromSlot(EquippedSlotIndexCached, 1);
+					UpdateEquippedTool();
+				}
+				
+				// Broadcast seed planted event (works for both players and AI workers)
+				OnSeedPlanted.Broadcast(GetOwner(), SeedData);
+				
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// Handle tool interactions
+	if (ToolType == EToolType::None)
+	{
+		return false;
 	}
 
 	// Check if actor implements IFarmableInterface
-	if (HitActor->Implements<UFarmableInterface>())
+	if (TargetActor->Implements<UFarmableInterface>())
 	{
-		bool bSuccess = IFarmableInterface::Execute_InteractTool(HitActor, CurrentToolType, GetOwner(), CurrentToolPower);
+		bool bSuccess = IFarmableInterface::Execute_InteractTool(TargetActor, ToolType, GetOwner(), ToolPower);
 		
 		if (bSuccess)
 		{
-			// Consume stamina - get cost from current tool
-			float StaminaCost = 10.0f; // Default
-			
-			// Try to get actual stamina cost from equipped tool
-			UInventoryComponent* InventoryComp = GetOwner()->FindComponentByClass<UInventoryComponent>();
-			if (InventoryComp)
+			// Consume stamina only if ability system exists (players have it, AI workers might not)
+			if (IAbilitySystemInterface* ASCInterface = Cast<IAbilitySystemInterface>(GetOwner()))
 			{
-				int32 EquippedSlotIndex = InventoryComp->GetEquippedSlot();
-				if (EquippedSlotIndex != INDEX_NONE)
-				{
-					const TArray<FInventorySlot>& Slots = InventoryComp->GetInventorySlots();
-					if (Slots.IsValidIndex(EquippedSlotIndex))
-					{
-						const FInventorySlot& Slot = Slots[EquippedSlotIndex];
-						if (const UToolDataAsset* ToolData = Cast<const UToolDataAsset>(Slot.ItemDefinition))
-						{
-							StaminaCost = ToolData->StaminaCost;
-						}
-					}
-				}
-			}
-			
-			ConsumeStamina(StaminaCost);
-		}
-	}
-	// Check if actor implements IHarvestableInterface
-	else if (HitActor->Implements<UHarvestableInterface>())
-	{
-		if (IHarvestableInterface::Execute_CanHarvest(HitActor))
-		{
-			FHarvestResult HarvestResult = IHarvestableInterface::Execute_Harvest(HitActor, GetOwner(), CurrentToolPower);
-			
-			if (HarvestResult.bSuccess)
-			{
-				// Consume stamina - get cost from current tool
-				float StaminaCost = 10.0f;
+				float StaminaCost = 10.0f; // Default
 				
 				// Try to get actual stamina cost from equipped tool
 				UInventoryComponent* InventoryComp = GetOwner()->FindComponentByClass<UInventoryComponent>();
@@ -149,8 +151,104 @@ void UFarmingComponent::UseEquippedTool(const FInputActionValue& Value)
 				
 				ConsumeStamina(StaminaCost);
 			}
+			
+			// Broadcast events based on tool type (works for both players and AI workers)
+			if (ToolType == EToolType::Hoe)
+			{
+				OnSoilTilled.Broadcast(GetOwner());
+			}
+			else if (ToolType == EToolType::WateringCan)
+			{
+				OnSoilWatered.Broadcast(GetOwner(), TargetActor);
+			}
+		}
+		
+		return bSuccess;
+	}
+	// Check if actor implements IHarvestableInterface
+	else if (TargetActor->Implements<UHarvestableInterface>())
+	{
+		if (IHarvestableInterface::Execute_CanHarvest(TargetActor))
+		{
+			FHarvestResult HarvestResult = IHarvestableInterface::Execute_Harvest(TargetActor, GetOwner(), ToolPower);
+			
+			if (HarvestResult.bSuccess)
+			{
+				// Consume stamina only if ability system exists (players have it, AI workers might not)
+				if (IAbilitySystemInterface* ASCInterface = Cast<IAbilitySystemInterface>(GetOwner()))
+				{
+					float StaminaCost = 10.0f;
+					
+					// Try to get actual stamina cost from equipped tool
+					UInventoryComponent* InventoryComp = GetOwner()->FindComponentByClass<UInventoryComponent>();
+					if (InventoryComp)
+					{
+						int32 EquippedSlotIndex = InventoryComp->GetEquippedSlot();
+						if (EquippedSlotIndex != INDEX_NONE)
+						{
+							const TArray<FInventorySlot>& Slots = InventoryComp->GetInventorySlots();
+							if (Slots.IsValidIndex(EquippedSlotIndex))
+							{
+								const FInventorySlot& Slot = Slots[EquippedSlotIndex];
+								if (const UToolDataAsset* ToolData = Cast<const UToolDataAsset>(Slot.ItemDefinition))
+								{
+									StaminaCost = ToolData->StaminaCost;
+								}
+							}
+						}
+					}
+					
+					ConsumeStamina(StaminaCost);
+				}
+				
+				// Get crop data for event broadcasting
+				UCropDataAsset* CropData = nullptr;
+				if (ACropBase* Crop = Cast<ACropBase>(TargetActor))
+				{
+					CropData = Crop->GetCropData();
+				}
+				
+				// Broadcast crop harvested event (works for both players and AI workers)
+				OnCropHarvested.Broadcast(GetOwner(), CropData, HarvestResult.Quantity);
+			}
+			
+			return HarvestResult.bSuccess;
 		}
 	}
+
+	return false;
+}
+
+bool UFarmingComponent::CanPerformFarmingAction(AActor* TargetActor, EToolType ToolType, USeedDataAsset* SeedData) const
+{
+	if (!TargetActor)
+	{
+		return false;
+	}
+
+	// Check seed planting
+	if (SeedData && SeedData->CropToPlant && TargetActor->Implements<UFarmableInterface>())
+	{
+		return IFarmableInterface::Execute_CanAcceptSeed(TargetActor);
+	}
+
+	// Check tool interactions
+	if (ToolType == EToolType::None)
+	{
+		return false;
+	}
+
+	if (TargetActor->Implements<UFarmableInterface>())
+	{
+		// For farmable, we can always try to interact (the interface will determine if it's valid)
+		return true;
+	}
+	else if (TargetActor->Implements<UHarvestableInterface>())
+	{
+		return IHarvestableInterface::Execute_CanHarvest(TargetActor);
+	}
+
+	return false;
 }
 
 void UFarmingComponent::SetEquippedTool(EToolType ToolType, float ToolPower)
@@ -287,4 +385,218 @@ bool UFarmingComponent::ConsumeStamina(float StaminaCost)
 	}
 
 	return false;
+}
+
+void UFarmingComponent::TraceForFarmable()
+{
+	// Only trace for tooltips if camera is set (player mode)
+	// NPCs don't need tooltips, so skip if no camera
+	if (!CameraComponent)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	// Only show tooltip if we have a tool or seed equipped
+	if (!bHasValidTool && !bHasSeedEquipped)
+	{
+		HideFarmingTooltip();
+		if (LastFarmableTarget && !IsValid(LastFarmableTarget))
+		{
+			ClearFarmable();
+		}
+		else if (LastFarmableTarget)
+		{
+			World->GetTimerManager().SetTimer(
+				FarmableResetTimer,
+				this,
+				&UFarmingComponent::ClearFarmable,
+				TooltipClearDelay,
+				false
+			);
+		}
+		return;
+	}
+
+	FVector Start = CameraComponent->GetComponentLocation();
+	FVector End = Start + (CameraComponent->GetForwardVector() * TooltipTraceDistance);
+
+	FHitResult HitResult;
+	FCollisionQueryParams Params(FName(TEXT("FarmingTooltipTrace")), true, GetOwner());
+
+	World->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, Params);
+	
+	AActor* HitActor = HitResult.GetActor();
+	if (!HitActor)
+	{
+		HideFarmingTooltip();
+		if (LastFarmableTarget && !IsValid(LastFarmableTarget))
+		{
+			ClearFarmable();
+		}
+		else if (LastFarmableTarget)
+		{
+			World->GetTimerManager().SetTimer(
+				FarmableResetTimer,
+				this,
+				&UFarmingComponent::ClearFarmable,
+				TooltipClearDelay,
+				false
+			);
+		}
+		return;
+	}
+
+	FText TooltipText;
+	bool bShouldShowTooltip = false;
+
+	// Check for seed planting first (highest priority)
+	if (bHasSeedEquipped && EquippedSeedData && EquippedSeedData->CropToPlant && HitActor->Implements<UFarmableInterface>())
+	{
+		if (IFarmableInterface::Execute_CanAcceptSeed(HitActor))
+		{
+			FString SeedName = EquippedSeedData->CropToPlant->CropName.ToString();
+			TooltipText = FText::FromString(FString::Printf(TEXT("Left Click to Plant %s"), *SeedName));
+			bShouldShowTooltip = true;
+		}
+	}
+	// Check for tool interaction with farmable
+	else if (bHasValidTool && HitActor->Implements<UFarmableInterface>())
+	{
+		// Validate that the tool can actually interact with this farmable
+		if (IFarmableInterface::Execute_CanInteractWithTool(HitActor, CurrentToolType, GetOwner()))
+		{
+			// Get context-sensitive text based on tool type
+			FString ActionText;
+			switch (CurrentToolType)
+			{
+			case EToolType::Hoe:
+				ActionText = "Till Soil";
+				break;
+			case EToolType::WateringCan:
+				ActionText = "Water Soil";
+				break;
+			case EToolType::Scythe:
+				// For scythe on soil, check if there's a harvestable crop
+				ActionText = "Harvest";
+				break;
+			default:
+				break;
+			}
+
+			if (!ActionText.IsEmpty())
+			{
+				TooltipText = FText::FromString(FString::Printf(TEXT("Left Click to %s"), *ActionText));
+				bShouldShowTooltip = true;
+			}
+		}
+	}
+	// Check for harvestable (crops)
+	else if (bHasValidTool && HitActor->Implements<UHarvestableInterface>())
+	{
+		// Only show harvest tooltip if holding a scythe
+		if (CurrentToolType == EToolType::Scythe && IHarvestableInterface::Execute_CanHarvest(HitActor))
+		{
+			if (HitActor->Implements<UTooltipProvider>())
+			{
+				TooltipText = ITooltipProvider::Execute_GetTooltipText(HitActor);
+			}
+			else
+			{
+				TooltipText = IHarvestableInterface::Execute_GetHarvestText(HitActor);
+			}
+			if (!TooltipText.IsEmpty())
+			{
+				TooltipText = FText::FromString(FString::Printf(TEXT("Left Click to %s"), *TooltipText.ToString()));
+				bShouldShowTooltip = true;
+			}
+		}
+	}
+
+	if (bShouldShowTooltip && HitActor != LastFarmableTarget)
+	{
+		ShowFarmingTooltip(HitActor, TooltipText);
+		LastFarmableTarget = HitActor;
+		World->GetTimerManager().ClearTimer(FarmableResetTimer);
+	}
+	else if (!bShouldShowTooltip)
+	{
+		HideFarmingTooltip();
+		if (LastFarmableTarget && !IsValid(LastFarmableTarget))
+		{
+			ClearFarmable();
+		}
+		else if (LastFarmableTarget)
+		{
+			World->GetTimerManager().SetTimer(
+				FarmableResetTimer,
+				this,
+				&UFarmingComponent::ClearFarmable,
+				TooltipClearDelay,
+				false
+			);
+		}
+	}
+}
+
+void UFarmingComponent::ShowFarmingTooltip(AActor* Target, const FText& Prompt)
+{
+	UWorld* World = GetWorld();
+	if (!FarmingTooltipWidget && FarmingTooltipWidgetClass && World)
+	{
+		FarmingTooltipWidget = CreateWidget<UUserWidget>(World, FarmingTooltipWidgetClass);
+		if (FarmingTooltipWidget)
+		{
+			FarmingTooltipWidget->AddToViewport();
+		}
+	}
+
+	if (FarmingTooltipWidget)
+	{
+		// Try to cast to InteractionWidget to use its SetPromptText method
+		if (UInteractionWidget* InteractionWidget = Cast<UInteractionWidget>(FarmingTooltipWidget))
+		{
+			InteractionWidget->SetPromptText(Prompt);
+			InteractionWidget->SetVisibility(ESlateVisibility::Visible);
+		}
+		else
+		{
+			// If not InteractionWidget, just make it visible
+			FarmingTooltipWidget->SetVisibility(ESlateVisibility::Visible);
+		}
+	}
+
+	LastFarmableTarget = Target;
+}
+
+void UFarmingComponent::HideFarmingTooltip()
+{
+	if (FarmingTooltipWidget)
+	{
+		if (UInteractionWidget* InteractionWidget = Cast<UInteractionWidget>(FarmingTooltipWidget))
+		{
+			InteractionWidget->HidePrompt();
+		}
+		else
+		{
+			FarmingTooltipWidget->SetVisibility(ESlateVisibility::Hidden);
+		}
+	}
+	LastFarmableTarget = nullptr;
+}
+
+void UFarmingComponent::ClearFarmable()
+{
+	LastFarmableTarget = nullptr;
+	HideFarmingTooltip();
+	
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(FarmableResetTimer);
+	}
 }

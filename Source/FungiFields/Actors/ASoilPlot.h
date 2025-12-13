@@ -31,6 +31,12 @@ public:
 	virtual bool CanAcceptSeed_Implementation() const override;
 	virtual bool PlantSeed_Implementation(UCropDataAsset* CropToPlant, AActor* Planter) override;
 	virtual FText GetInteractionText_Implementation() const override;
+	virtual bool CanInteractWithTool_Implementation(EToolType ToolType, AActor* Interactor) const override;
+	virtual FVector GetActionLocation_Implementation() const override;
+	virtual float GetInteractionRange_Implementation() const override;
+
+	// ITooltipProvider implementation
+	virtual FText GetTooltipText_Implementation() const override;
 
 	/**
 	 * Initialize the soil plot with soil data asset.

@@ -10,6 +10,9 @@ class UItemDataAsset;
 class UStaticMeshComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnInventoryChanged);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnItemAdded, UItemDataAsset*, Item, int32, Amount, int32, NewTotal);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnItemRemoved, UItemDataAsset*, Item, int32, Amount, int32, NewTotal);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemEquipped, UItemDataAsset*, Item, int32, SlotIndex);
 
 /**
  * Component responsible for managing player inventory.
@@ -51,6 +54,18 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Inventory")
 	FOnInventoryChanged OnInventoryChanged;
 
+	/** Delegate broadcast when an item is added to inventory */
+	UPROPERTY(BlueprintAssignable, Category = "Inventory")
+	FOnItemAdded OnItemAdded;
+
+	/** Delegate broadcast when an item is removed from inventory */
+	UPROPERTY(BlueprintAssignable, Category = "Inventory")
+	FOnItemRemoved OnItemRemoved;
+
+	/** Delegate broadcast when an item is equipped */
+	UPROPERTY(BlueprintAssignable, Category = "Inventory")
+	FOnItemEquipped OnItemEquipped;
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -69,6 +84,13 @@ private:
 	bool AddToNewSlot(UItemDataAsset* ItemToAdd, int32 Amount);
 
 	void BroadcastUpdate();
+
+	/**
+	 * Get the total count of a specific item across all inventory slots.
+	 * @param Item The item to count
+	 * @return Total quantity of the item in inventory
+	 */
+	int32 GetItemTotalCount(UItemDataAsset* Item) const;
 
 	/**
 	 * Attaches or removes mesh based on equipped item.

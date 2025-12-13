@@ -3,14 +3,25 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "../ENUM/EToolType.h"
+#include "../Data/UCropDataAsset.h"
+#include "../Data/USeedDataAsset.h"
 #include "UFarmingComponent.generated.h"
 
 class UCameraComponent;
 class UInventoryComponent;
 class UCharacterAttributeSet;
 class UToolDataAsset;
-class USeedDataAsset;
+class UItemDataAsset;
 struct FInputActionValue;
+
+// Forward declarations
+class AActor;
+
+// Delegate declarations for farming actions
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnCropHarvested, AActor*, Harvester, UCropDataAsset*, CropData, int32, Quantity);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSeedPlanted, AActor*, Planter, USeedDataAsset*, SeedData);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSoilTilled, AActor*, Tiller);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoilWatered, AActor*, Waterer, AActor*, SoilPlot);
 
 /**
  * Component responsible for handling farming tool usage.
@@ -78,6 +89,61 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Farming")
 	void UpdateEquippedTool();
+
+	/**
+	 * Execute a farming action on a target actor at a specific location.
+	 * Works for both players (camera-based) and NPCs (location-based).
+	 * @param TargetActor The actor to perform the action on
+	 * @param ActionLocation The world location where the action is being performed
+	 * @param ToolType The type of tool being used (or None for planting)
+	 * @param ToolPower The power of the tool
+	 * @param SeedData Optional seed data if planting
+	 * @return True if the action was successful
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Farming")
+	bool ExecuteFarmingAction(AActor* TargetActor, const FVector& ActionLocation, EToolType ToolType, float ToolPower, USeedDataAsset* SeedData = nullptr);
+
+	/**
+	 * Check if a farming action can be performed on a target actor.
+	 * @param TargetActor The actor to check
+	 * @param ToolType The type of tool (or None for planting)
+	 * @param SeedData Optional seed data if checking planting
+	 * @return True if the action can be performed
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Farming")
+	bool CanPerformFarmingAction(AActor* TargetActor, EToolType ToolType, USeedDataAsset* SeedData = nullptr) const;
+
+	/**
+	 * Check if a seed is currently equipped.
+	 * @return True if a seed is equipped
+	 */
+	UFUNCTION(BlueprintPure, Category = "Farming")
+	bool HasSeedEquipped() const { return bHasSeedEquipped; }
+
+	/**
+	 * Get the currently equipped seed data.
+	 * @return Seed data asset, or nullptr if no seed equipped
+	 */
+	UFUNCTION(BlueprintPure, Category = "Farming")
+	USeedDataAsset* GetEquippedSeedData() const { return EquippedSeedData; }
+
+	/** Delegate broadcast when a crop is harvested */
+	UPROPERTY(BlueprintAssignable, Category = "Farming Events")
+	FOnCropHarvested OnCropHarvested;
+
+	/** Delegate broadcast when a seed is planted */
+	UPROPERTY(BlueprintAssignable, Category = "Farming Events")
+	FOnSeedPlanted OnSeedPlanted;
+
+	/** Delegate broadcast when soil is tilled */
+	UPROPERTY(BlueprintAssignable, Category = "Farming Events")
+	FOnSoilTilled OnSoilTilled;
+
+	/** Delegate broadcast when soil is watered */
+	UPROPERTY(BlueprintAssignable, Category = "Farming Events")
+	FOnSoilWatered OnSoilWatered;
+
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	
 protected:
 
@@ -89,11 +155,47 @@ protected:
 	bool PerformToolTrace(FHitResult& OutHit) const;
 
 	/**
+	 * Performs a line trace from the camera to detect farmable/harvestable actors.
+	 * Called every frame in TickComponent.
+	 */
+	void TraceForFarmable();
+
+	/**
+	 * Shows the farming tooltip widget with the specified prompt text.
+	 * @param Target The actor that can be farmed/harvested
+	 * @param Prompt The text to display in the tooltip widget
+	 */
+	void ShowFarmingTooltip(AActor* Target, const FText& Prompt);
+
+	/**
+	 * Hides the farming tooltip widget.
+	 */
+	void HideFarmingTooltip();
+
+	/**
+	 * Clears the current farmable reference and hides the widget.
+	 * Called by timer when no farmable is detected.
+	 */
+	void ClearFarmable();
+
+	/**
 	 * Consume stamina for tool usage.
 	 * @param StaminaCost Amount of stamina to consume
 	 * @return True if stamina was available and consumed
 	 */
 	bool ConsumeStamina(float StaminaCost);
+
+	/** Widget class to use for displaying farming tooltips */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Farming Settings")
+	TSubclassOf<UUserWidget> FarmingTooltipWidgetClass;
+
+	/** Maximum distance for farming tooltip traces */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Farming Settings", meta = (ClampMin = "0.0"))
+	float TooltipTraceDistance = 800.0f;
+
+	/** Delay in seconds before clearing the widget when no farmable is detected */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Farming Settings", meta = (ClampMin = "0.0"))
+	float TooltipClearDelay = 3.0f;
 
 private:
 	/** Camera component for line traces */
@@ -112,19 +214,31 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Farming Data")
 	bool bHasValidTool = false;
 
-	/** Whether a valid seed is currently equipped */
-	UPROPERTY(VisibleAnywhere, Category = "Farming Data")
-	bool bHasSeedEquipped = false;
-
-	/** Data asset for the currently equipped seed (if any) */
-	UPROPERTY()
-	TObjectPtr<USeedDataAsset> EquippedSeedData = nullptr;
-
-	/** Cached index of the inventory slot used for the equipped tool/seed */
-	UPROPERTY()
-	int32 EquippedSlotIndexCached = INDEX_NONE;
-
 	/** Maximum distance for tool interaction */
 	UPROPERTY(EditAnywhere, Category = "Farming Settings", meta = (ClampMin = "0.0"))
 	float ToolTraceDistance = 800.0f;
+
+	/** Whether a seed is currently equipped */
+	UPROPERTY(VisibleAnywhere, Category = "Farming Data")
+	bool bHasSeedEquipped = false;
+
+	/** Data asset for the currently equipped seed */
+	UPROPERTY(VisibleAnywhere, Category = "Farming Data")
+	TObjectPtr<USeedDataAsset> EquippedSeedData = nullptr;
+
+	/** Cached index of the equipped slot in inventory */
+	UPROPERTY(VisibleAnywhere, Category = "Farming Data")
+	int32 EquippedSlotIndexCached = INDEX_NONE;
+
+private:
+	/** The currently focused farmable/harvestable actor */
+	UPROPERTY()
+	AActor* LastFarmableTarget = nullptr;
+
+	/** Timer handle for clearing the widget after losing focus */
+	FTimerHandle FarmableResetTimer;
+
+	/** Instance of the farming tooltip widget */
+	UPROPERTY()
+	UUserWidget* FarmingTooltipWidget = nullptr;
 };

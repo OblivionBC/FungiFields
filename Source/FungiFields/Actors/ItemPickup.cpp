@@ -54,3 +54,12 @@ FText AItemPickup::GetInteractionText_Implementation()
 	return NSLOCTEXT("ItemPickup", "PickupTextDefault", "Pick up Item");
 }
 
+FText AItemPickup::GetTooltipText_Implementation() const
+{
+	if (ItemDataAsset)
+	{
+		return FText::Format(NSLOCTEXT("ItemPickup", "PickupText", "Pick up {0}"), ItemDataAsset->ItemName);
+	}
+	return NSLOCTEXT("ItemPickup", "PickupTextDefault", "Pick up Item");
+}
+

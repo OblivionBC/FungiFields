@@ -65,7 +65,7 @@ void USoilComponent::AddWater(float Amount)
 
 	float OldWaterLevel = CurrentWaterLevel;
 	CurrentWaterLevel = FMath::Clamp(CurrentWaterLevel + Amount, 0.0f, SoilData->MaxWaterLevel);
-
+	UE_LOG(LogTemp, Display, TEXT("Water level at %f"), CurrentWaterLevel);
 	// Start evaporation timer if water was added and timer isn't running
 	if (CurrentWaterLevel > 0.0f && !WaterEvaporationTimerHandle.IsValid())
 	{
@@ -145,6 +145,7 @@ bool USoilComponent::Till(const float TillPower)
 		bIsTilled = true;
 		OnSoilTilled.Broadcast(GetOwner());
 		UpdateVisuals();
+		return true;
 	}
 	return false;
 }

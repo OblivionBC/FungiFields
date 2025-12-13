@@ -22,3 +22,4 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Seed")
 	TObjectPtr<UCropDataAsset> CropToPlant;
 };
+

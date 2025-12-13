@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/Interface.h"
 #include "../Data/FHarvestResult.h"
+#include "ITooltipProvider.h"
 #include "IHarvestableInterface.generated.h"
 
 /**
@@ -15,7 +16,7 @@ class UHarvestableInterface : public UInterface
 	GENERATED_BODY()
 };
 
-class IHarvestableInterface
+class IHarvestableInterface : public ITooltipProvider
 {
 	GENERATED_BODY()
 
@@ -41,4 +42,19 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Farming")
 	FText GetHarvestText() const;
+
+	/**
+	 * Get the world location where harvesting should be performed.
+	 * Useful for AI pathfinding and positioning.
+	 * @return World location for harvest action
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Farming")
+	FVector GetActionLocation() const;
+
+	/**
+	 * Get the maximum interaction range for harvesting.
+	 * @return Maximum distance an actor can be to harvest
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Farming")
+	float GetInteractionRange() const;
 };

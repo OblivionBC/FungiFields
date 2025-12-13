@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/Interface.h"
 #include "../ENUM/EToolType.h"
+#include "ITooltipProvider.h"
 #include "IFarmableInterface.generated.h"
 
 class UCropDataAsset;
@@ -17,7 +18,7 @@ class UFarmableInterface : public UInterface
 	GENERATED_BODY()
 };
 
-class IFarmableInterface
+class IFarmableInterface : public ITooltipProvider
 {
 	GENERATED_BODY()
 
@@ -54,5 +55,29 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Farming")
 	FText GetInteractionText() const;
+
+	/**
+	 * Check if a tool can interact with this farmable.
+	 * @param ToolType The type of tool being used
+	 * @param Interactor The actor using the tool
+	 * @return True if the tool can perform an action on this farmable
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Farming")
+	bool CanInteractWithTool(EToolType ToolType, AActor* Interactor) const;
+
+	/**
+	 * Get the world location where farming actions should be performed.
+	 * Useful for AI pathfinding and positioning.
+	 * @return World location for action execution
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Farming")
+	FVector GetActionLocation() const;
+
+	/**
+	 * Get the maximum interaction range for this farmable.
+	 * @return Maximum distance an actor can be to interact
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Farming")
+	float GetInteractionRange() const;
 };
 

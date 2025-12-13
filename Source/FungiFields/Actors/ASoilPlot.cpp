@@ -1,12 +1,21 @@
 #include "ASoilPlot.h"
 #include "../Components/USoilComponent.h"
+#include "../Components/InventoryComponent.h"
+#include "../Inventory/FInventorySlot.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "../Data/USoilDataAsset.h"
 #include "../Actors/ACropBase.h"
 #include "../Data/UCropDataAsset.h"
 #include "../ENUM/EToolType.h"
+#include "../Interfaces/ITooltipProvider.h"
+#include "../Interfaces/IHarvestableInterface.h"
+#include "../Data/FHarvestResult.h"
+#include "../Data/UToolDataAsset.h"
 #include "Engine/World.h"
+#include "NiagaraFunctionLibrary.h"
+#include "Particles/ParticleSystem.h"
+#include "Kismet/GameplayStatics.h"
 
 ASoilPlot::ASoilPlot()
 {
@@ -69,6 +78,16 @@ bool ASoilPlot::InteractTool_Implementation(EToolType ToolType, AActor* Interact
 		return false;
 	}
 
+	// Validate the action before executing
+	if (!CanInteractWithTool_Implementation(ToolType, Interactor))
+	{
+		return false;
+	}
+
+	bool bSuccess = false;
+	UNiagaraSystem* ParticleEffect = nullptr;
+	UParticleSystem* ParticleEffectCascade = nullptr;
+
 	switch (ToolType)
 	{
 	case EToolType::Hoe:
@@ -78,22 +97,100 @@ bool ASoilPlot::InteractTool_Implementation(EToolType ToolType, AActor* Interact
 			// Update mesh to tilled version if it was successfully tilled
 			if (UStaticMesh* LoadedMesh = SoilDataAsset->TilledMesh.LoadSynchronous())
 			{
-					MeshComponent->SetStaticMesh(LoadedMesh);
+				MeshComponent->SetStaticMesh(LoadedMesh);
 			}
-			return true;
+			bSuccess = true;
+			// Note: Soil tilled event is broadcast from UFarmingComponent::ExecuteFarmingAction
 		}
 		break;
 
 	case EToolType::WateringCan:
-		// Add water to soil
-		SoilComponent->AddWater(ToolPower);
-		return true;
+		// Add water to soil (only if tilled)
+		if (SoilComponent->IsTilled())
+		{
+			SoilComponent->AddWater(ToolPower);
+			bSuccess = true;
+			// Note: Soil watered event is broadcast from UFarmingComponent::ExecuteFarmingAction
+		}
+		else
+		{
+			return false;
+		}
+		break;
+
+	case EToolType::Scythe:
+		// Harvest crop if present
+		if (ACropBase* Crop = SoilComponent->GetCrop())
+		{
+			if (Crop->Implements<UHarvestableInterface>())
+			{
+				if (IHarvestableInterface::Execute_CanHarvest(Crop))
+				{
+					FHarvestResult HarvestResult = IHarvestableInterface::Execute_Harvest(Crop, Interactor, ToolPower);
+					bSuccess = HarvestResult.bSuccess;
+				}
+			}
+		}
+		break;
 
 	default:
-		break;
+		return false;
 	}
 
-	return false;
+	// Only spawn particles if action was successful
+	if (bSuccess && GetWorld())
+	{
+		// Get particle effect from tool if available
+		if (Interactor)
+		{
+			if (UInventoryComponent* InventoryComp = Interactor->FindComponentByClass<UInventoryComponent>())
+			{
+				int32 EquippedSlotIndex = InventoryComp->GetEquippedSlot();
+				if (EquippedSlotIndex != INDEX_NONE)
+				{
+					const TArray<FInventorySlot>& Slots = InventoryComp->GetInventorySlots();
+					if (Slots.IsValidIndex(EquippedSlotIndex))
+					{
+						const FInventorySlot& Slot = Slots[EquippedSlotIndex];
+						if (const UToolDataAsset* ToolData = Cast<const UToolDataAsset>(Slot.ItemDefinition))
+						{
+							ParticleEffect = ToolData->ToolParticleEffect;
+							ParticleEffectCascade = ToolData->ToolParticleEffectCascade;
+						}
+					}
+				}
+			}
+		}
+
+		// Spawn particles if available
+		FVector SpawnLocation = GetActorLocation();
+		SpawnLocation.Z += 10.0f; // Slightly above ground
+
+		if (ParticleEffect)
+		{
+			UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+				GetWorld(),
+				ParticleEffect,
+				SpawnLocation,
+				FRotator::ZeroRotator,
+				FVector::OneVector,
+				true,
+				true
+			);
+		}
+		else if (ParticleEffectCascade)
+		{
+			UGameplayStatics::SpawnEmitterAtLocation(
+				GetWorld(),
+				ParticleEffectCascade,
+				SpawnLocation,
+				FRotator::ZeroRotator,
+				true
+			);
+		}
+	}
+
+	return bSuccess;
 }
 
 bool ASoilPlot::CanAcceptSeed_Implementation() const
@@ -142,6 +239,62 @@ FText ASoilPlot::GetInteractionText_Implementation() const
 	}
 
 	return FText::FromString("Plant Seed");
+}
+
+bool ASoilPlot::CanInteractWithTool_Implementation(EToolType ToolType, AActor* Interactor) const
+{
+	if (!SoilComponent)
+	{
+		return false;
+	}
+
+	switch (ToolType)
+	{
+	case EToolType::Hoe:
+		// Hoe can only till untilled soil
+		return !SoilComponent->IsTilled();
+
+	case EToolType::WateringCan:
+		// Watering can can only water tilled soil
+		return SoilComponent->IsTilled();
+
+	case EToolType::Scythe:
+		// Scythe can only harvest if there's a harvestable crop
+		if (ACropBase* Crop = SoilComponent->GetCrop())
+		{
+			if (Crop->Implements<UHarvestableInterface>())
+			{
+				return IHarvestableInterface::Execute_CanHarvest(Crop);
+			}
+		}
+		return false;
+
+	default:
+		return false;
+	}
+}
+
+FText ASoilPlot::GetTooltipText_Implementation() const
+{
+	return GetInteractionText_Implementation();
+}
+
+FVector ASoilPlot::GetActionLocation_Implementation() const
+{
+	// Return the center of the soil plot, slightly above ground
+	FVector Location = GetActorLocation();
+	if (MeshComponent)
+	{
+		FBoxSphereBounds Bounds = MeshComponent->CalcBounds(MeshComponent->GetComponentTransform());
+		Location.Z = Bounds.Origin.Z + Bounds.BoxExtent.Z * 0.5f;
+	}
+	return Location;
+}
+
+float ASoilPlot::GetInteractionRange_Implementation() const
+{
+	// Default interaction range for soil plots
+	return 150.0f;
 }
 
 ACropBase* ASoilPlot::SpawnCrop(UCropDataAsset* CropData)

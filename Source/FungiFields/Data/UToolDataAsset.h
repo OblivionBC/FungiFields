@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "UItemDataAsset.h"
 #include "../ENUM/EToolType.h"
+#include "NiagaraSystem.h"
+#include "Particles/ParticleSystem.h"
 #include "UToolDataAsset.generated.h"
 
 /**
@@ -32,4 +34,12 @@ public:
 	/** Interaction range for the tool */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Tool Properties", meta = (ClampMin = "0.0"))
 	float ToolRange = 200.0f;
+
+	/** Particle effect to spawn when using this tool (Niagara) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Tool Visuals")
+	TObjectPtr<UNiagaraSystem> ToolParticleEffect;
+
+	/** Particle effect to spawn when using this tool (Cascade - legacy) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Tool Visuals")
+	TObjectPtr<UParticleSystem> ToolParticleEffectCascade;
 };

@@ -116,6 +116,11 @@ FText AInteractableActor::GetInteractionText_Implementation()
     return FText::FromString("Press E to Interact");
 }
 
+FText AInteractableActor::GetTooltipText_Implementation() const
+{
+    return FText::FromString("Press E to Interact");
+}
+
 void AInteractableActor::Interact_Implementation(AActor* Interactor)
 {
     // Example: Print interaction feedback

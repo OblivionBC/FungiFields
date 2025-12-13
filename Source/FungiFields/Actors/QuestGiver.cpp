@@ -37,3 +37,8 @@ FText AQuestGiver::GetInteractionText_Implementation()
 	return FText::FromString("Press E to Get Quest");
 }
 
+FText AQuestGiver::GetTooltipText_Implementation() const
+{
+	return FText::FromString("Press E to Get Quest");
+}
+

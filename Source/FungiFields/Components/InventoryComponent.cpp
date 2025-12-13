@@ -29,10 +29,12 @@ bool UInventoryComponent::TryAddItem(UItemDataAsset* ItemToAdd, int32 Amount)
 
 	int32 RemainingAmount = Amount;
 	bool bAnyItemAdded = false;
+	int32 TotalAdded = 0;
 
 	if (TryStackItem(ItemToAdd, RemainingAmount))
 	{
 		bAnyItemAdded = true;
+		TotalAdded = Amount - RemainingAmount;
 		BroadcastUpdate();
 	}
 
@@ -41,8 +43,18 @@ bool UInventoryComponent::TryAddItem(UItemDataAsset* ItemToAdd, int32 Amount)
 		if (AddToNewSlot(ItemToAdd, RemainingAmount))
 		{
 			bAnyItemAdded = true;
+			TotalAdded += RemainingAmount;
 			BroadcastUpdate();
 		}
+	}
+
+	if (bAnyItemAdded)
+	{
+		// Calculate new total quantity of this item
+		int32 NewTotal = GetItemTotalCount(ItemToAdd);
+		
+		// Broadcast specific item added event
+		OnItemAdded.Broadcast(ItemToAdd, TotalAdded, NewTotal);
 	}
 
 	return bAnyItemAdded;
@@ -167,18 +179,23 @@ void UInventoryComponent::UpdateEquippedItemMesh()
 		return;
 	}
 
-	// Register and initialize the component
-	EquippedItemMeshComponent->RegisterComponent();
+	// Set up the component properties before registration
 	EquippedItemMeshComponent->SetStaticMesh(ItemMesh);
 	EquippedItemMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	EquippedItemMeshComponent->SetGenerateOverlapEvents(false);
+	EquippedItemMeshComponent->SetVisibility(true);
+	EquippedItemMeshComponent->SetHiddenInGame(false);
 
-	// Attach to character mesh at RightHandItemSlot socket
+	// Attach to character mesh at RightHandItemSlot socket BEFORE registration
+	// This ensures the component is properly parented in the component hierarchy
 	EquippedItemMeshComponent->AttachToComponent(
 		CharacterMesh,
 		FAttachmentTransformRules::SnapToTargetNotIncludingScale,
 		FName("RightHandItemSlot")
 	);
+
+	// Register the component after attachment to ensure it's in the correct hierarchy
+	EquippedItemMeshComponent->RegisterComponent();
 }
 
 void UInventoryComponent::EquipSlot(const FInputActionValue& Value, int32 SlotIndex)
@@ -191,7 +208,22 @@ void UInventoryComponent::EquipSlot(const FInputActionValue& Value, int32 SlotIn
 	}
 
 	CurrentEquippedSlotIndex = SlotIndex;
+	
+	// Get the item being equipped
+	UItemDataAsset* EquippedItem = nullptr;
+	if (InventorySlots.IsValidIndex(SlotIndex) && !InventorySlots[SlotIndex].IsEmpty())
+	{
+		EquippedItem = const_cast<UItemDataAsset*>(InventorySlots[SlotIndex].ItemDefinition.Get());
+	}
+	
 	UpdateEquippedItemMesh();
+	
+	// Broadcast item equipped event
+	if (EquippedItem)
+	{
+		OnItemEquipped.Broadcast(EquippedItem, SlotIndex);
+	}
+	
 	BroadcastUpdate();
 }
 
@@ -215,6 +247,9 @@ bool UInventoryComponent::ConsumeFromSlot(int32 SlotIndex, int32 Amount)
 	}
 
 	const int32 OriginalCount = Slot.Count;
+	const UItemDataAsset* ItemToRemove = Slot.ItemDefinition;
+	const int32 AmountToRemove = FMath::Min(Amount, OriginalCount);
+	
 	Slot.Count = FMath::Max(0, Slot.Count - Amount);
 
 	if (Slot.Count == 0)
@@ -233,6 +268,31 @@ bool UInventoryComponent::ConsumeFromSlot(int32 SlotIndex, int32 Amount)
 		UpdateEquippedItemMesh();
 	}
 
+	// Calculate new total quantity
+	int32 NewTotal = GetItemTotalCount(const_cast<UItemDataAsset*>(ItemToRemove));
+	
+	// Broadcast specific item removed event
+	OnItemRemoved.Broadcast(const_cast<UItemDataAsset*>(ItemToRemove), AmountToRemove, NewTotal);
+
 	BroadcastUpdate();
 	return true;
+}
+
+int32 UInventoryComponent::GetItemTotalCount(UItemDataAsset* Item) const
+{
+	if (!Item)
+	{
+		return 0;
+	}
+
+	int32 TotalCount = 0;
+	for (const FInventorySlot& Slot : InventorySlots)
+	{
+		if (Slot.ItemDefinition == Item)
+		{
+			TotalCount += Slot.Count;
+		}
+	}
+
+	return TotalCount;
 }

@@ -3,6 +3,7 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Interface.h"
+#include "ITooltipProvider.h"
 #include "InteractableInterface.generated.h"
 
 UINTERFACE(MinimalAPI)
@@ -11,7 +12,7 @@ class UInteractableInterface : public UInterface
 	GENERATED_BODY()
 };
 
-class IInteractableInterface
+class IInteractableInterface : public ITooltipProvider
 {
 	GENERATED_BODY()
 

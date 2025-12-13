@@ -25,6 +25,9 @@ public:
 	virtual void Interact_Implementation(AActor* Interactor) override;
 	virtual FText GetInteractionText_Implementation() override;
 
+	// ITooltipProvider implementation
+	virtual FText GetTooltipText_Implementation() const override;
+
 protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Pickup")
 	TObjectPtr<UItemDataAsset> ItemDataAsset;

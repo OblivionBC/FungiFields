@@ -30,6 +30,11 @@ public:
 	virtual FHarvestResult Harvest_Implementation(AActor* Harvester, float ToolPower) override;
 	virtual bool CanHarvest_Implementation() const override;
 	virtual FText GetHarvestText_Implementation() const override;
+	virtual FVector GetActionLocation_Implementation() const override;
+	virtual float GetInteractionRange_Implementation() const override;
+
+	// ITooltipProvider implementation
+	virtual FText GetTooltipText_Implementation() const override;
 
 	/**
 	 * Initialize the crop with crop data and parent soil.

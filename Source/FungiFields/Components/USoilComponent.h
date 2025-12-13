@@ -7,7 +7,7 @@
 class USoilDataAsset;
 class ACropBase;
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSoilTilled, AActor*, Soil);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSoilTilledState, AActor*, Soil);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCropPlanted, AActor*, Soil, ACropBase*, Crop);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCropRemoved, AActor*, Soil);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnWaterLevelChanged, AActor*, Soil, float, NewWaterLevel);
@@ -120,7 +120,7 @@ public:
 
 	/** Delegate broadcast when soil is tilled */
 	UPROPERTY(BlueprintAssignable, Category = "Soil")
-	FOnSoilTilled OnSoilTilled;
+	FOnSoilTilledState OnSoilTilled;
 
 	/** Delegate broadcast when a crop is planted */
 	UPROPERTY(BlueprintAssignable, Category = "Soil")
