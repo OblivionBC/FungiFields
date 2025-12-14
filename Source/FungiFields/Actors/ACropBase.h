@@ -107,7 +107,4 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "Crop")
 	float HarvestProgress = 0;
-
-	UPROPERTY(EditAnywhere, Category = "Crop")
-	float HarvestThreshold = 100.0f;
 };

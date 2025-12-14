@@ -218,12 +218,10 @@ void UInventorySlotsWidget::UpdateSlotWidget(UWidget* SlotWidget, const FInvento
 	}
 	else
 	{
-		if (ItemIcon)
+		if (ItemIcon && SlotData.ItemDefinition)
 		{
-			if (SlotData.ItemDefinition && SlotData.ItemDefinition->ItemIcon.IsValid())
+			if (UTexture2D* IconTexture = SlotData.ItemDefinition->ItemIcon)
 			{
-				UTexture2D* IconTexture = SlotData.ItemDefinition->ItemIcon.LoadSynchronous();
-				if (IconTexture)
 				{
 					ItemIcon->SetBrushFromTexture(IconTexture, true);
 					
@@ -235,10 +233,6 @@ void UInventorySlotsWidget::UpdateSlotWidget(UWidget* SlotWidget, const FInvento
 					ItemIcon->SetBrush(Brush);
 					
 					ItemIcon->SetVisibility(ESlateVisibility::Visible);
-				}
-				else
-				{
-					ItemIcon->SetVisibility(ESlateVisibility::Collapsed);
 				}
 			}
 			else

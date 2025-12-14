@@ -3,7 +3,7 @@ Content/__ExternalObjects__/
 Content/WindmillValley/
 Content/MixedVFX/
 *.DotSettings.user
-
+**.md
 # Visual Studio 2022 user specific files
 .vs/
 .idea/

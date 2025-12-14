@@ -19,6 +19,11 @@
 #include "FungiFields/Components/LevelComponent.h"
 #include "FungiFields/Components/QuestComponent.h"
 #include "FungiFields/Components/UFarmingComponent.h"
+#include "FungiFields/Components/UPlacementComponent.h"
+#include "FungiFields/Data/USoilDataAsset.h"
+#include "FungiFields/Data/UItemDataAsset.h"
+#include "AssetRegistry/AssetRegistryModule.h"
+#include "Engine/AssetManager.h"
 #include "Misc/CoreMiscDefines.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
@@ -67,6 +72,7 @@ AFungiFieldsCharacter::AFungiFieldsCharacter()
 	QuestComponent = CreateDefaultSubobject<UQuestComponent>(TEXT("QuestComponent"));
 	LevelComponent = CreateDefaultSubobject<ULevelComponent>(TEXT("LevelComponent"));
 	FarmingComponent = CreateDefaultSubobject<UFarmingComponent>(TEXT("FarmingComponent"));
+	PlacementComponent = CreateDefaultSubobject<UPlacementComponent>(TEXT("PlacementComponent"));
 
 	// Attribute Sets
 	CharacterAttributeSet = CreateDefaultSubobject<UCharacterAttributeSet>(TEXT("CharacterAttributeSet"));
@@ -171,6 +177,18 @@ void AFungiFieldsCharacter::BeginPlay()
 				InventoryComponent->OnInventoryChanged.AddDynamic(FarmingComponent, &UFarmingComponent::UpdateEquippedTool);
 			}
 		}
+
+		if (PlacementComponent)
+		{
+			PlacementComponent->SetCamera(FollowCamera);
+			if (InventoryComponent)
+			{
+				// Subscribe to item equipped events to detect placeable items
+				InventoryComponent->OnItemEquipped.AddDynamic(this, &AFungiFieldsCharacter::OnItemEquipped);
+				// Subscribe to placeable picked up events to add item to inventory
+				PlacementComponent->OnPlaceablePickedUp.AddDynamic(this, &AFungiFieldsCharacter::OnSoilPlotPickedUp);
+			}
+		}
 	}
 }
 
@@ -239,6 +257,22 @@ void AFungiFieldsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 			EnhancedInputComponent->BindAction(EquipSlot9Action, ETriggerEvent::Started, 
 				InventoryComponent, &UInventoryComponent::EquipSlot, 8);
 		}
+
+		if (PlacementComponent)
+		{
+			if (PlaceAction)
+			{
+				EnhancedInputComponent->BindAction(PlaceAction, ETriggerEvent::Started, PlacementComponent, &UPlacementComponent::PlaceItem);
+			}
+			if (PickupAction)
+			{
+				EnhancedInputComponent->BindAction(PickupAction, ETriggerEvent::Started, PlacementComponent, &UPlacementComponent::PickupItem);
+			}
+			if (AdjustPlacementRotationAction)
+			{
+				EnhancedInputComponent->BindAction(AdjustPlacementRotationAction, ETriggerEvent::Triggered, PlacementComponent, &UPlacementComponent::AdjustPlacementRotation);
+			}
+		}
 	}
 	else
 	{
@@ -284,9 +318,9 @@ void AFungiFieldsCharacter::Look(const FInputActionValue& Value)
 
 void AFungiFieldsCharacter::ToggleQuestMenu(const FInputActionValue& Value)
 {
-	if (!QuestMenuClass) 
+	if (!QuestMenuWidget) 
 	{
-		UE_LOG(LogTemp, Warning, TEXT("QuestMenuClass not set!"));
+		UE_LOG(LogTemp, Warning, TEXT("QuestMenuWidget not set!"));
 		return;
 	}
 
@@ -296,6 +330,7 @@ void AFungiFieldsCharacter::ToggleQuestMenu(const FInputActionValue& Value)
 
 	if (!bQuestMenuVisible)
 	{
+		this->GetCharacterMovement()->StopMovementImmediately();
 		QuestMenuWidget->RefreshQuests();
 		QuestMenuWidget->SetVisibility(ESlateVisibility::Visible);
 		bQuestMenuVisible = true;
@@ -315,6 +350,28 @@ void AFungiFieldsCharacter::ToggleQuestMenu(const FInputActionValue& Value)
 	}
 }
 
+void AFungiFieldsCharacter::OnItemEquipped(UItemDataAsset* Item, int32 SlotIndex)
+{
+	if (!PlacementComponent)
+	{
+		return;
+	}
+
+	// Check if the equipped item is placeable
+	if (Item && Item->bIsPlaceable)
+	{
+		PlacementComponent->EnterPlacementMode(Item);
+	}
+	else
+	{
+		// Exit placement mode if item is not placeable
+		if (PlacementComponent->IsInPlacementMode())
+		{
+			PlacementComponent->ExitPlacementMode();
+		}
+	}
+}
+
 void AFungiFieldsCharacter::OnQuestMenuClosed()
 {
 	if (!QuestMenuWidget)
@@ -330,4 +387,78 @@ void AFungiFieldsCharacter::OnQuestMenuClosed()
 	FInputModeGameOnly Mode;
 	PC->SetInputMode(Mode);
 	PC->bShowMouseCursor = false;
+}
+
+void AFungiFieldsCharacter::OnSoilPlotPickedUp(AActor* Picker, USoilDataAsset* SoilData)
+{
+	if (!InventoryComponent || !SoilData)
+	{
+		return;
+	}
+
+	// Search inventory for an item that matches this soil data asset
+	const TArray<FInventorySlot>& Slots = InventoryComponent->GetInventorySlots();
+	UItemDataAsset* MatchingItem = nullptr;
+
+	// First, try to find an existing item in inventory with matching PlaceableSoilDataAsset
+	for (const FInventorySlot& Slot : Slots)
+	{
+		if (!Slot.IsEmpty() && Slot.ItemDefinition && Slot.ItemDefinition->bIsPlaceable)
+		{
+			if (Slot.ItemDefinition->PlaceableSoilDataAsset == SoilData)
+			{
+				MatchingItem = const_cast<UItemDataAsset*>(Slot.ItemDefinition.Get());
+				break;
+			}
+		}
+	}
+
+	// If we found a matching item, add it to inventory
+	if (MatchingItem)
+	{
+		InventoryComponent->TryAddItem(MatchingItem, 1);
+	}
+	else
+	{
+		// Try to find the item using Asset Registry
+		// This searches all loaded ItemDataAssets for one matching the soil data
+		UItemDataAsset* FoundItem = FindItemDataAssetBySoilData(SoilData);
+		if (FoundItem)
+		{
+			InventoryComponent->TryAddItem(FoundItem, 1);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("AFungiFieldsCharacter::OnSoilPlotPickedUp: No matching placeable item found for soil data asset '%s'. Item not added to inventory."), *SoilData->GetName());
+		}
+	}
+}
+
+UItemDataAsset* AFungiFieldsCharacter::FindItemDataAssetBySoilData(USoilDataAsset* SoilData) const
+{
+	if (!SoilData)
+	{
+		return nullptr;
+	}
+
+	// Use Asset Registry to find all ItemDataAsset instances
+	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+	IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
+
+	TArray<FAssetData> AssetDataList;
+	AssetRegistry.GetAssetsByClass(UItemDataAsset::StaticClass()->GetClassPathName(), AssetDataList, true);
+
+	// Search through all ItemDataAssets for one matching the soil data
+	for (const FAssetData& AssetData : AssetDataList)
+	{
+		// Load the asset - GetAsset() will load it if not already loaded
+		UItemDataAsset* ItemAsset = Cast<UItemDataAsset>(AssetData.GetAsset());
+		
+		if (ItemAsset && ItemAsset->bIsPlaceable && ItemAsset->PlaceableSoilDataAsset == SoilData)
+		{
+			return ItemAsset;
+		}
+	}
+
+	return nullptr;
 }

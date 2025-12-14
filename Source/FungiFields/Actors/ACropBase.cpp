@@ -8,11 +8,9 @@
 #include "../Data/FHarvestResult.h"
 #include "../Data/UItemDataAsset.h"
 #include "../Actors/ItemPickup.h"
-#include "../Interfaces/ITooltipProvider.h"
 #include "Engine/World.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "NiagaraFunctionLibrary.h"
-#include "Particles/ParticleSystem.h"
 #include "Kismet/GameplayStatics.h"
 
 ACropBase::ACropBase()
@@ -54,20 +52,19 @@ void ACropBase::Initialize(UCropDataAsset* InCropData, ASoilPlot* InParentSoil)
 	CropDataAsset = InCropData;
 	ParentSoil = InParentSoil;
 
+	// Clear any existing bindings to ensure clean state
+	GrowthComponent->OnGrowthStageChanged.Clear();
+	GrowthComponent->OnCropFullyGrown.Clear();
+	GrowthComponent->OnCropWithered.Clear();
+
+	// Ensure subscription is set up before starting growth (BeginPlay may not have run yet)
+	// This prevents missing delegate broadcasts if the timer fires before BeginPlay
+	GrowthComponent->OnGrowthStageChanged.AddDynamic(this, &ACropBase::OnGrowthStageChanged);
+	GrowthComponent->OnCropFullyGrown.AddDynamic(this, &ACropBase::OnCropFullyGrown);
+	GrowthComponent->OnCropWithered.AddDynamic(this, &ACropBase::OnCropWithered);
+
 	// Initialize growth component
 	GrowthComponent->Initialize(InCropData, InParentSoil);
-
-	// Load and set initial mesh (0% growth)
-	if (InCropData->GrowthMeshes.Num() > 0)
-	{
-		UStaticMesh* LoadedMesh = InCropData->GrowthMeshes[0].LoadSynchronous();
-		if (LoadedMesh)
-		{
-			MeshComponent->SetStaticMesh(LoadedMesh);
-		}
-	}
-
-	GrowthComponent->StartGrowth();
 }
 
 FHarvestResult ACropBase::Harvest_Implementation(AActor* Harvester, float ToolPower)
@@ -87,69 +84,81 @@ FHarvestResult ACropBase::Harvest_Implementation(AActor* Harvester, float ToolPo
 	}
 
 	HarvestProgress += ToolPower;
-	if (HarvestProgress >= HarvestThreshold)
+	if (HarvestProgress >= CropDataAsset->HarvestPowerNeeded)
 	{
-		// Calculate yield
-		int32 BaseQuantity = CropDataAsset->BaseHarvestQuantity;
-		int32 FinalQuantity = BaseQuantity;
+		// Check if crop is withered
+		bool bIsWithered = GrowthComponent && GrowthComponent->IsWithered();
 
-		// Check for yield bonus from soil
-		if (USoilComponent* SoilComp = ParentSoil->FindComponentByClass<USoilComponent>())
+		// Only spawn items and particles if crop is NOT withered
+		if (!bIsWithered)
 		{
-			if (USoilDataAsset* SoilData = SoilComp->GetSoilData())
+			// Calculate yield
+			int32 BaseQuantity = CropDataAsset->BaseHarvestQuantity;
+			int32 FinalQuantity = BaseQuantity;
+
+			// Check for yield bonus from soil
+			if (USoilComponent* SoilComp = ParentSoil->FindComponentByClass<USoilComponent>())
 			{
-				// Roll for double yield based on soil yield chance
-				float RandomValue = UKismetMathLibrary::RandomFloatInRange(0.0f, 1.0f);
-				if (RandomValue <= SoilData->YieldChance)
+				if (USoilDataAsset* SoilData = SoilComp->GetSoilData())
 				{
-					FinalQuantity *= 2;
+					// Roll for double yield based on soil yield chance
+					float RandomValue = UKismetMathLibrary::RandomFloatInRange(0.0f, 1.0f);
+					if (RandomValue <= SoilData->YieldChance)
+					{
+						FinalQuantity *= 2;
+					}
+				}
+			}
+
+			// Load harvest item
+			if (CropDataAsset->HarvestItem.IsValid())
+			{
+				UItemDataAsset* HarvestItem = CropDataAsset->HarvestItem.LoadSynchronous();
+				if (HarvestItem)
+				{
+					Result.HarvestItem = HarvestItem;
+					Result.Quantity = FinalQuantity;
+					Result.bSuccess = true;
+
+					// Spawn harvest items
+					SpawnHarvestItems(HarvestItem, FinalQuantity);
+				}
+			}
+
+			// Spawn harvest particles before destroying
+			if (CropDataAsset && GetWorld())
+			{
+				FVector SpawnLocation = GetActorLocation();
+				SpawnLocation.Z += 10.0f; // Slightly above ground
+
+				if (CropDataAsset->HarvestParticleEffect)
+				{
+					UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+						GetWorld(),
+						CropDataAsset->HarvestParticleEffect,
+						SpawnLocation,
+						FRotator::ZeroRotator,
+						FVector::OneVector,
+						true,
+						true
+					);
+				}
+				else if (CropDataAsset->HarvestParticleEffectCascade)
+				{
+					UGameplayStatics::SpawnEmitterAtLocation(
+						GetWorld(),
+						CropDataAsset->HarvestParticleEffectCascade,
+						SpawnLocation,
+						FRotator::ZeroRotator,
+						true
+					);
 				}
 			}
 		}
-
-		// Load harvest item
-		if (CropDataAsset->HarvestItem.IsValid())
+		else
 		{
-			UItemDataAsset* HarvestItem = CropDataAsset->HarvestItem.LoadSynchronous();
-			if (HarvestItem)
-			{
-				Result.HarvestItem = HarvestItem;
-				Result.Quantity = FinalQuantity;
-				Result.bSuccess = true;
-
-				// Spawn harvest items
-				SpawnHarvestItems(HarvestItem, FinalQuantity);
-			}
-		}
-
-		// Spawn harvest particles before destroying
-		if (CropDataAsset && GetWorld())
-		{
-			FVector SpawnLocation = GetActorLocation();
-			SpawnLocation.Z += 10.0f; // Slightly above ground
-
-			if (CropDataAsset->HarvestParticleEffect)
-			{
-				UNiagaraFunctionLibrary::SpawnSystemAtLocation(
-					GetWorld(),
-					CropDataAsset->HarvestParticleEffect,
-					SpawnLocation,
-					FRotator::ZeroRotator,
-					FVector::OneVector,
-					true,
-					true
-				);
-			}
-			else if (CropDataAsset->HarvestParticleEffectCascade)
-			{
-				UGameplayStatics::SpawnEmitterAtLocation(
-					GetWorld(),
-					CropDataAsset->HarvestParticleEffectCascade,
-					SpawnLocation,
-					FRotator::ZeroRotator,
-					true
-				);
-			}
+			// Withered crop: mark as success but don't spawn items
+			Result.bSuccess = true;
 		}
 
 		// Remove crop from soil
@@ -175,7 +184,8 @@ bool ACropBase::CanHarvest_Implementation() const
 		return false;
 	}
 
-	return GrowthComponent->IsFullyGrown() && !GrowthComponent->IsWithered();
+	// Can harvest if fully grown OR if withered
+	return (GrowthComponent->IsFullyGrown() && !GrowthComponent->IsWithered()) || GrowthComponent->IsWithered();
 }
 
 FText ACropBase::GetHarvestText_Implementation() const
@@ -183,6 +193,12 @@ FText ACropBase::GetHarvestText_Implementation() const
 	if (!CanHarvest_Implementation())
 	{
 		return FText::FromString("Not Ready");
+	}
+
+	// Return different text if crop is withered
+	if (GrowthComponent && GrowthComponent->IsWithered())
+	{
+		return FText::FromString("Remove Withered Crop");
 	}
 
 	return FText::FromString("Harvest");
@@ -219,7 +235,7 @@ void ACropBase::OnGrowthStageChanged(AActor* Crop, float Progress)
 	}
 
 	// Determine which mesh to use based on progress
-	int32 MeshIndex = -1;
+	int8 MeshIndex;
 	if (Progress >= 1.0f)
 	{
 		MeshIndex = 3; // 100%
@@ -238,13 +254,9 @@ void ACropBase::OnGrowthStageChanged(AActor* Crop, float Progress)
 	}
 
 	// Update mesh if valid index
-	if (CropDataAsset->GrowthMeshes.IsValidIndex(MeshIndex) && CropDataAsset->GrowthMeshes[MeshIndex].IsValid())
+	if (CropDataAsset->GrowthMeshes.IsValidIndex(MeshIndex) && CropDataAsset->GrowthMeshes[MeshIndex])
 	{
-		UStaticMesh* LoadedMesh = CropDataAsset->GrowthMeshes[MeshIndex].LoadSynchronous();
-		if (LoadedMesh)
-		{
-			MeshComponent->SetStaticMesh(LoadedMesh);
-		}
+		MeshComponent->SetStaticMesh(CropDataAsset->GrowthMeshes[MeshIndex]);
 	}
 }
 
@@ -261,13 +273,9 @@ void ACropBase::OnCropWithered(AActor* Crop)
 	}
 
 	// Update mesh to withered version
-	if (CropDataAsset->WitheredMesh.IsValid())
+	if (CropDataAsset->WitheredMesh)
 	{
-		UStaticMesh* LoadedMesh = CropDataAsset->WitheredMesh.LoadSynchronous();
-		if (LoadedMesh)
-		{
-			MeshComponent->SetStaticMesh(LoadedMesh);
-		}
+		MeshComponent->SetStaticMesh(CropDataAsset->WitheredMesh);
 	}
 }
 

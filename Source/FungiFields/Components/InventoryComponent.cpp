@@ -166,7 +166,7 @@ void UInventoryComponent::UpdateEquippedItemMesh()
 	}
 
 	// Check if item has a mesh
-	UStaticMesh* ItemMesh = EquippedSlot.ItemDefinition->ItemMesh.LoadSynchronous();
+	UStaticMesh* ItemMesh = EquippedSlot.ItemDefinition->ItemMesh;
 	if (!ItemMesh)
 	{
 		return;

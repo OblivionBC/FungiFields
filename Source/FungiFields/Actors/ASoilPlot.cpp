@@ -55,13 +55,8 @@ void ASoilPlot::Initialize(USoilDataAsset* InSoilData)
 	SoilComponent->Initialize(InSoilData);
 
 	// Load and set mesh
-	if (InSoilData->SoilMesh.IsValid())
-	{
-		UStaticMesh* LoadedMesh = InSoilData->SoilMesh.LoadSynchronous();
-		if (LoadedMesh)
-		{
-			MeshComponent->SetStaticMesh(LoadedMesh);
-		}
+	if (InSoilData->SoilMesh) {
+		MeshComponent->SetStaticMesh(InSoilData->SoilMesh);
 	}
 
 	// Subscribe to soil component delegates
@@ -95,9 +90,9 @@ bool ASoilPlot::InteractTool_Implementation(EToolType ToolType, AActor* Interact
 		if (SoilComponent->Till(ToolPower))
 		{
 			// Update mesh to tilled version if it was successfully tilled
-			if (UStaticMesh* LoadedMesh = SoilDataAsset->TilledMesh.LoadSynchronous())
+			if (SoilDataAsset->TilledMesh)
 			{
-				MeshComponent->SetStaticMesh(LoadedMesh);
+				MeshComponent->SetStaticMesh(SoilDataAsset->TilledMesh);
 			}
 			bSuccess = true;
 			// Note: Soil tilled event is broadcast from UFarmingComponent::ExecuteFarmingAction

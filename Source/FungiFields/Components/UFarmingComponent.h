@@ -235,6 +235,9 @@ private:
 	UPROPERTY()
 	AActor* LastFarmableTarget = nullptr;
 
+	/** The last tooltip text that was displayed */
+	FText LastTooltipText;
+
 	/** Timer handle for clearing the widget after losing focus */
 	FTimerHandle FarmableResetTimer;
 

@@ -56,16 +56,30 @@ public:
 	bool IsWithered() const { return bIsWithered; }
 
 	/**
-	 * Start the growth timer.
+	 * Start the growth (registers with crop manager).
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Crop Growth")
 	void StartGrowth();
 
 	/**
-	 * Pause the growth timer.
+	 * Pause the growth (unregisters from crop manager).
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Crop Growth")
 	void PauseGrowth();
+
+	/**
+	 * Update growth progress. Called by UCropManagerSubsystem.
+	 * @param DeltaTime Time since last update
+	 */
+	void UpdateGrowth(float DeltaTime);
+
+	/**
+	 * Update the crop mesh based on growth progress.
+	 * Called when growth stage threshold is crossed.
+	 * Public so it can be called to trigger initial mesh update.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Crop Growth")
+	void UpdateMesh();
 
 	/** Delegate broadcast when growth stage changes (mesh update) */
 	UPROPERTY(BlueprintAssignable, Category = "Crop Growth")
@@ -78,20 +92,6 @@ public:
 	/** Delegate broadcast when crop withers from lack of water */
 	UPROPERTY(BlueprintAssignable, Category = "Crop Growth")
 	FOnCropWithered OnCropWithered;
-
-protected:
-	/**
-	 * Timer callback for growth progression.
-	 * Checks water availability and increments growth progress.
-	 */
-	UFUNCTION()
-	void OnGrowthTimer();
-
-	/**
-	 * Update the crop mesh based on growth progress.
-	 * Called when growth stage threshold is crossed.
-	 */
-	void UpdateMesh();
 
 private:
 	/** Configuration data for this crop */
@@ -110,22 +110,17 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Crop Growth Data")
 	bool bIsWithered = false;
 
-	/** Timer handle for growth progression */
-	FTimerHandle GrowthTimerHandle;
+	/** Whether growth is currently active (registered with manager) */
+	bool bGrowthActive = false;
 
-	/** Time without water before crop withers (seconds) */
-	UPROPERTY(EditDefaultsOnly, Category = "Crop Growth Settings", meta = (ClampMin = "0.0"))
+	/** Time without water before crop withers (seconds) - set from crop data asset */
 	float WitherTimeWithoutWater = 30.0f;
 
 	/** Time since last water check */
 	float TimeWithoutWater = 0.0f;
 
-	/** Interval for growth timer (seconds) */
-	UPROPERTY(EditDefaultsOnly, Category = "Crop Growth Settings", meta = (ClampMin = "0.1"))
-	float GrowthCheckInterval = 1.0f;
-
-	/** Growth increment per check (calculated based on growth time and fertility) */
-	float GrowthIncrementPerCheck = 0.01f;
+	/** Growth increment per second (calculated based on growth time and fertility) */
+	float GrowthIncrementPerSecond = 0.01f;
 
 	/** Last growth stage index for mesh updates */
 	int32 LastGrowthStageIndex = -1;

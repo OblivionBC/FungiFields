@@ -29,6 +29,7 @@ UFarmingComponent::UFarmingComponent(const FObjectInitializer& ObjectInitializer
 	EquippedSeedData = nullptr;
 	EquippedSlotIndexCached = INDEX_NONE;
 	LastFarmableTarget = nullptr;
+	LastTooltipText = FText::GetEmpty();
 	FarmingTooltipWidget = nullptr;
 	TooltipTraceDistance = 800.0f;
 	TooltipClearDelay = 3.0f;
@@ -259,6 +260,10 @@ void UFarmingComponent::SetEquippedTool(EToolType ToolType, float ToolPower)
 
 void UFarmingComponent::UpdateEquippedTool()
 {
+	EToolType PreviousToolType = CurrentToolType;
+	bool bPreviousHasTool = bHasValidTool;
+	bool bPreviousHasSeed = bHasSeedEquipped;
+	
 	bHasValidTool = false;
 	bHasSeedEquipped = false;
 	EquippedSeedData = nullptr;
@@ -300,9 +305,17 @@ void UFarmingComponent::UpdateEquippedTool()
 	{
 		// Valid tool equipped
 		bHasValidTool = true;
-		CurrentToolType = ToolData->ToolType;
+		EToolType NewToolType = ToolData->ToolType;
 		CurrentToolPower = ToolData->ToolPower;
 		ToolTraceDistance = ToolData->ToolRange;
+		
+		// Clear tooltip text if tool type changed or switched from seed to tool
+		if (PreviousToolType != NewToolType || bPreviousHasTool != bHasValidTool || bPreviousHasSeed != bHasSeedEquipped)
+		{
+			LastTooltipText = FText::GetEmpty();
+		}
+		
+		CurrentToolType = NewToolType;
 		return;
 	}
 
@@ -312,6 +325,12 @@ void UFarmingComponent::UpdateEquippedTool()
 		{
 			bHasSeedEquipped = true;
 			EquippedSeedData = SeedData;
+			
+			// Clear tooltip text if switched from tool to seed or seed changed
+			if (bPreviousHasTool != bHasValidTool || bPreviousHasSeed != bHasSeedEquipped)
+			{
+				LastTooltipText = FText::GetEmpty();
+			}
 		}
 	}
 }
@@ -469,7 +488,8 @@ void UFarmingComponent::TraceForFarmable()
 	else if (bHasValidTool && HitActor->Implements<UFarmableInterface>())
 	{
 		// Validate that the tool can actually interact with this farmable
-		if (IFarmableInterface::Execute_CanInteractWithTool(HitActor, CurrentToolType, GetOwner()))
+		// Note: Scythe is excluded here - harvest should only show on crops, not soil
+		if (IFarmableInterface::Execute_CanInteractWithTool(HitActor, CurrentToolType, GetOwner()) && CurrentToolType != EToolType::Scythe)
 		{
 			// Get context-sensitive text based on tool type
 			FString ActionText;
@@ -480,10 +500,6 @@ void UFarmingComponent::TraceForFarmable()
 				break;
 			case EToolType::WateringCan:
 				ActionText = "Water Soil";
-				break;
-			case EToolType::Scythe:
-				// For scythe on soil, check if there's a harvestable crop
-				ActionText = "Harvest";
 				break;
 			default:
 				break;
@@ -518,10 +534,14 @@ void UFarmingComponent::TraceForFarmable()
 		}
 	}
 
-	if (bShouldShowTooltip && HitActor != LastFarmableTarget)
+	// Update tooltip if actor changed OR if tooltip text would be different (tool changed)
+	bool bShouldUpdateTooltip = bShouldShowTooltip && (HitActor != LastFarmableTarget || !TooltipText.EqualTo(LastTooltipText));
+	
+	if (bShouldUpdateTooltip)
 	{
 		ShowFarmingTooltip(HitActor, TooltipText);
 		LastFarmableTarget = HitActor;
+		LastTooltipText = TooltipText;
 		World->GetTimerManager().ClearTimer(FarmableResetTimer);
 	}
 	else if (!bShouldShowTooltip)
@@ -593,6 +613,7 @@ void UFarmingComponent::HideFarmingTooltip()
 void UFarmingComponent::ClearFarmable()
 {
 	LastFarmableTarget = nullptr;
+	LastTooltipText = FText::GetEmpty();
 	HideFarmingTooltip();
 	
 	if (UWorld* World = GetWorld())

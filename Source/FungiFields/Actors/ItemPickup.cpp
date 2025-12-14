@@ -8,58 +8,94 @@ AItemPickup::AItemPickup()
 {
 	PrimaryActorTick.bCanEverTick = false;
 
-	RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("RootComponent"));
-
-	CollisionSphere = CreateDefaultSubobject<USphereComponent>(TEXT("CollisionSphere"));
-	CollisionSphere->SetupAttachment(RootComponent);
-	CollisionSphere->SetSphereRadius(50.0f);
-	CollisionSphere->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-	CollisionSphere->SetCollisionResponseToAllChannels(ECR_Ignore);
-	CollisionSphere->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
-
 	MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MeshComponent"));
-	MeshComponent->SetupAttachment(CollisionSphere);
+	RootComponent = MeshComponent;
+	
+	// Set up mesh collision: collide with world (everything) but ignore pawns
+	// Enable physics so gravity works
+	MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	MeshComponent->SetCollisionObjectType(ECC_WorldDynamic);
+	MeshComponent->SetCollisionResponseToAllChannels(ECR_Block);
+	MeshComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+	MeshComponent->SetGenerateOverlapEvents(false);
+	
+	MeshComponent->SetEnableGravity(true);
+	MeshComponent->SetSimulatePhysics(true);
+
+	// Create sphere component for pickup detection - attached to mesh so it moves with the physics body
+	PickupSphere = CreateDefaultSubobject<USphereComponent>(TEXT("PickupSphere"));
+	PickupSphere->SetupAttachment(MeshComponent);
+	PickupSphere->SetSphereRadius(PickupRadius);
+	
+	// Set up sphere collision: overlap only with pawns for pickup detection
+	PickupSphere->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	PickupSphere->SetCollisionObjectType(ECC_WorldDynamic);
+	PickupSphere->SetCollisionResponseToAllChannels(ECR_Ignore);
+	PickupSphere->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+	PickupSphere->SetGenerateOverlapEvents(true);
+	
+	// Ensure sphere doesn't simulate physics and follows the parent physics body
+	PickupSphere->SetSimulatePhysics(false);
+	PickupSphere->SetEnableGravity(false);
 }
 
-void AItemPickup::Interact_Implementation(AActor* Interactor)
+void AItemPickup::BeginPlay()
 {
-	if (!Interactor || !ItemDataAsset)
+	Super::BeginPlay();
+
+	// Bind overlap event
+	if (PickupSphere)
+	{
+		PickupSphere->OnComponentBeginOverlap.AddDynamic(this, &AItemPickup::OnOverlapBegin);
+	}
+
+	// Update sphere radius if it was changed in editor
+	if (PickupSphere && PickupRadius > 0.0f)
+	{
+		PickupSphere->SetSphereRadius(PickupRadius);
+	}
+
+	if (MeshComponent && PickupSphere)
+	{
+		PickupSphere->WeldTo(MeshComponent);
+	}
+}
+
+void AItemPickup::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+{
+	if (!OtherActor || OtherActor == this)
 	{
 		return;
 	}
 
-	UInventoryComponent* Inventory = Interactor->FindComponentByClass<UInventoryComponent>();
-
-	if (Inventory)
+	// Only process pickup for pawns (players and NPCs)
+	APawn* OverlappingPawn = Cast<APawn>(OtherActor);
+	if (!OverlappingPawn)
 	{
-		bool bSuccess = Inventory->TryAddItem(ItemDataAsset, 1);
-
-		if (bSuccess)
-		{
-			Destroy();
-			return;
-		}
-		
-		UE_LOG(LogTemp, Warning, TEXT("ItemPickup::Interact_Implementation: Failed to add item. Interactor: %s, ItemDataAsset: %s"), 
-			*Interactor->GetName(), *ItemDataAsset->GetName());
+		return;
 	}
+
+	TryPickupItem(OtherActor);
 }
 
-FText AItemPickup::GetInteractionText_Implementation()
+void AItemPickup::TryPickupItem(AActor* PickerUpper)
 {
-	if (ItemDataAsset)
+	if (!PickerUpper || !ItemDataAsset)
 	{
-		return FText::Format(NSLOCTEXT("ItemPickup", "PickupText", "Pick up {0}"), ItemDataAsset->ItemName);
+		return;
 	}
-	return NSLOCTEXT("ItemPickup", "PickupTextDefault", "Pick up Item");
-}
 
-FText AItemPickup::GetTooltipText_Implementation() const
-{
-	if (ItemDataAsset)
+	// Check if the actor has an inventory component
+	UInventoryComponent* Inventory = PickerUpper->FindComponentByClass<UInventoryComponent>();
+	if (!Inventory)
 	{
-		return FText::Format(NSLOCTEXT("ItemPickup", "PickupText", "Pick up {0}"), ItemDataAsset->ItemName);
+		return;
 	}
-	return NSLOCTEXT("ItemPickup", "PickupTextDefault", "Pick up Item");
+	
+	// If successfully added, destroy the actor
+	if (Inventory->TryAddItem(ItemDataAsset, ItemAmount))
+	{
+		Destroy();
+	}
 }
 

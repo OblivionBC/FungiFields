@@ -2,8 +2,8 @@
 #include "../Data/UCropDataAsset.h"
 #include "../Actors/ASoilPlot.h"
 #include "../Components/USoilComponent.h"
+#include "../Subsystems/UCropManagerSubsystem.h"
 #include "Engine/World.h"
-#include "TimerManager.h"
 
 UCropGrowthComponent::UCropGrowthComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -11,10 +11,10 @@ UCropGrowthComponent::UCropGrowthComponent(const FObjectInitializer& ObjectIniti
 	PrimaryComponentTick.bCanEverTick = false;
 	CurrentGrowthProgress = 0.0f;
 	bIsWithered = false;
+	bGrowthActive = false;
 	WitherTimeWithoutWater = 30.0f;
 	TimeWithoutWater = 0.0f;
-	GrowthCheckInterval = 1.0f;
-	GrowthIncrementPerCheck = 0.01f;
+	GrowthIncrementPerSecond = 0.01f;
 	LastGrowthStageIndex = -1;
 }
 
@@ -25,10 +25,14 @@ void UCropGrowthComponent::BeginPlay()
 
 void UCropGrowthComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// Clear timer if active
-	if (GetWorld() && GrowthTimerHandle.IsValid())
+	// Unregister from crop manager if active
+	if (bGrowthActive && GetWorld())
 	{
-		GetWorld()->GetTimerManager().ClearTimer(GrowthTimerHandle);
+		if (UCropManagerSubsystem* CropManager = GetWorld()->GetSubsystem<UCropManagerSubsystem>())
+		{
+			CropManager->UnregisterCrop(this);
+		}
+		bGrowthActive = false;
 	}
 
 	Super::EndPlay(EndPlayReason);
@@ -48,6 +52,16 @@ void UCropGrowthComponent::Initialize(UCropDataAsset* InCropData, ASoilPlot* InP
 		return;
 	}
 
+	// Unregister from manager if already registered
+	if (bGrowthActive && GetWorld())
+	{
+		if (UCropManagerSubsystem* CropManager = GetWorld()->GetSubsystem<UCropManagerSubsystem>())
+		{
+			CropManager->UnregisterCrop(this);
+		}
+		bGrowthActive = false;
+	}
+
 	CropData = InCropData;
 	ParentSoil = InParentSoil;
 	CurrentGrowthProgress = 0.0f;
@@ -55,17 +69,21 @@ void UCropGrowthComponent::Initialize(UCropDataAsset* InCropData, ASoilPlot* InP
 	TimeWithoutWater = 0.0f;
 	LastGrowthStageIndex = -1;
 
-	// Calculate growth increment based on growth time and soil fertility
+	// Set wither time from crop data asset
+	WitherTimeWithoutWater = InCropData->WitherTimeWithoutWater;
+
+	// Calculate growth increment per second based on growth time and soil fertility
 	if (USoilComponent* SoilComp = ParentSoil->FindComponentByClass<USoilComponent>())
 	{
 		float EffectiveFertility = SoilComp->GetEffectiveFertility();
 		float AdjustedGrowthTime = CropData->GrowthTimeSeconds / EffectiveFertility;
-		GrowthIncrementPerCheck = GrowthCheckInterval / AdjustedGrowthTime;
+		GrowthIncrementPerSecond = 1.0f / AdjustedGrowthTime;
 	}
 	else
 	{
-		GrowthIncrementPerCheck = GrowthCheckInterval / CropData->GrowthTimeSeconds;
+		GrowthIncrementPerSecond = 1.0f / CropData->GrowthTimeSeconds;
 	}
+	StartGrowth();
 }
 
 void UCropGrowthComponent::StartGrowth()
@@ -76,28 +94,36 @@ void UCropGrowthComponent::StartGrowth()
 		return;
 	}
 
-	// Start growth timer
+	// Register with crop manager
 	if (UWorld* World = GetWorld())
 	{
-		World->GetTimerManager().SetTimer(
-			GrowthTimerHandle,
-			this,
-			&UCropGrowthComponent::OnGrowthTimer,
-			GrowthCheckInterval,
-			true
-		);
+		if (UCropManagerSubsystem* CropManager = World->GetSubsystem<UCropManagerSubsystem>())
+		{
+			CropManager->RegisterCrop(this);
+			bGrowthActive = true;
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("UCropGrowthComponent::StartGrowth: CropManagerSubsystem not found!"));
+		}
 	}
+	UpdateMesh();
 }
 
 void UCropGrowthComponent::PauseGrowth()
 {
-	if (UWorld* World = GetWorld())
+	// Unregister from crop manager
+	if (bGrowthActive && GetWorld())
 	{
-		World->GetTimerManager().PauseTimer(GrowthTimerHandle);
+		if (UCropManagerSubsystem* CropManager = GetWorld()->GetSubsystem<UCropManagerSubsystem>())
+		{
+			CropManager->UnregisterCrop(this);
+		}
+		bGrowthActive = false;
 	}
 }
 
-void UCropGrowthComponent::OnGrowthTimer()
+void UCropGrowthComponent::UpdateGrowth(float DeltaTime)
 {
 	if (!CropData || !ParentSoil || bIsWithered)
 	{
@@ -120,18 +146,18 @@ void UCropGrowthComponent::OnGrowthTimer()
 
 		// Increment growth progress
 		float OldProgress = CurrentGrowthProgress;
-		CurrentGrowthProgress = FMath::Min(1.0f, CurrentGrowthProgress + GrowthIncrementPerCheck);
+		CurrentGrowthProgress = FMath::Min(1.0f, CurrentGrowthProgress + GrowthIncrementPerSecond * DeltaTime);
 
 		// Consume water
-		SoilComp->ConsumeWater(CropData->WaterConsumptionRate * GrowthCheckInterval);
+		SoilComp->ConsumeWater(CropData->WaterConsumptionRate * DeltaTime);
 
-		// Check if fully grown
+		// Check if fully grown (reached 100% for the first time)
 		if (CurrentGrowthProgress >= 1.0f && OldProgress < 1.0f)
 		{
 			OnCropFullyGrown.Broadcast(GetOwner());
 			UpdateMesh();
 		}
-		// Check if growth stage changed
+		// Update mesh if progress increased (stage might have changed)
 		else if (CurrentGrowthProgress > OldProgress)
 		{
 			UpdateMesh();
@@ -140,19 +166,22 @@ void UCropGrowthComponent::OnGrowthTimer()
 	else
 	{
 		// No water - increment time without water
-		TimeWithoutWater += GrowthCheckInterval;
+		TimeWithoutWater += DeltaTime;
 
 		// Check if crop should wither
 		if (TimeWithoutWater >= WitherTimeWithoutWater)
 		{
 			bIsWithered = true;
 			OnCropWithered.Broadcast(GetOwner());
-			UpdateMesh();
 
-			// Pause growth timer
-			if (UWorld* World = GetWorld())
+			// Unregister from manager (crop is withered, no longer needs updates)
+			if (bGrowthActive && GetWorld())
 			{
-				World->GetTimerManager().PauseTimer(GrowthTimerHandle);
+				if (UCropManagerSubsystem* CropManager = GetWorld()->GetSubsystem<UCropManagerSubsystem>())
+				{
+					CropManager->UnregisterCrop(this);
+				}
+				bGrowthActive = false;
 			}
 		}
 	}
@@ -160,6 +189,12 @@ void UCropGrowthComponent::OnGrowthTimer()
 
 void UCropGrowthComponent::UpdateMesh()
 {
+	// Don't update growth stage mesh if crop is withered (withered mesh takes priority)
+	if (bIsWithered)
+	{
+		return;
+	}
+
 	// Calculate current growth stage index (0, 1, 2, 3 for 0%, 25%, 50%, 100%)
 	int32 CurrentStageIndex = -1;
 

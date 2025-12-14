@@ -38,9 +38,9 @@ public:
 
 	/** Visual representation of the soil */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Soil Visuals")
-	TSoftObjectPtr<UStaticMesh> SoilMesh;
+	UStaticMesh* SoilMesh;
 
 	/** Visual representation when tilled */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Soil Visuals")
-	TSoftObjectPtr<UStaticMesh> TilledMesh;
+	UStaticMesh* TilledMesh;
 };

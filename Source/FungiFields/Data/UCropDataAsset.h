@@ -31,6 +31,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Crop Properties", meta = (ClampMin = "0.0"))
 	float WaterConsumptionRate = 1.0f;
 
+	/** Time without water before crop withers (seconds) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Crop Properties", meta = (ClampMin = "0.0"))
+	float WitherTimeWithoutWater = 30.0f;
+
 	/** Item added to inventory on harvest */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Crop Properties")
 	TSoftObjectPtr<UItemDataAsset> HarvestItem;
@@ -39,13 +43,17 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Crop Properties", meta = (ClampMin = "1"))
 	int32 BaseHarvestQuantity = 1;
 
+	/** Power needed to harvest this crop */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Crop Properties", meta = (ClampMin = "0.0"))
+	float HarvestPowerNeeded = 100.0f;
+
 	/** Meshes for different growth stages (0%, 25%, 50%, 100%) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Crop Visuals")
-	TArray<TSoftObjectPtr<UStaticMesh>> GrowthMeshes;
+	TArray<UStaticMesh*> GrowthMeshes;
 
 	/** Mesh when crop wilts from lack of water */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Crop Visuals")
-	TSoftObjectPtr<UStaticMesh> WitheredMesh;
+	UStaticMesh* WitheredMesh;
 
 	/** Particle effect to spawn when harvesting this crop (Niagara) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Crop Visuals")

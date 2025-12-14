@@ -107,6 +107,13 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Soil Plot")
 	TObjectPtr<USoilDataAsset> SoilDataAsset;
 
+public:
+	TObjectPtr<USoilDataAsset> GetSoilDataAsset() const
+	{
+		return SoilDataAsset;
+	}
+
+protected:
 	/** Class of crop actor to spawn when planting */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Soil Plot")
 	TSubclassOf<ACropBase> CropActorClass;

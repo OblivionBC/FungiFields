@@ -60,6 +60,10 @@ public:
 	/** Farming component for handling tool usage */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Farming", meta = (AllowPrivateAccess = "true"))
 	UFarmingComponent* FarmingComponent;
+
+	/** Placement component for handling placeable items */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Placement", meta = (AllowPrivateAccess = "true"))
+	class UPlacementComponent* PlacementComponent;
 	
 	/** Ability System Component. Required to use Gameplay Attributes and Gameplay Abilities. */
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Abilities", meta = (AllowPrivateAccess = "true"))
@@ -140,6 +144,18 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* EquipSlot9Action;
+
+	/** Place Item Input Action */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* PlaceAction;
+
+	/** Pickup Item Input Action */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* PickupAction;
+
+	/** Adjust Placement Rotation Input Action (Scroll Wheel) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* AdjustPlacementRotationAction;
 	
 	/** HUD Widget class to create and display */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
@@ -174,6 +190,21 @@ protected:
 
 	UFUNCTION()
 	void OnQuestMenuClosed();
+
+	UFUNCTION()
+	void OnItemEquipped(UItemDataAsset* Item, int32 SlotIndex);
+
+	UFUNCTION()
+	void OnSoilPlotPickedUp(AActor* Picker, class USoilDataAsset* SoilData);
+
+private:
+	/**
+	 * Find an ItemDataAsset that matches the given SoilDataAsset.
+	 * Searches through asset registry for placeable items.
+	 * @param SoilData The soil data asset to match
+	 * @return Matching ItemDataAsset, or nullptr if not found
+	 */
+	class UItemDataAsset* FindItemDataAssetBySoilData(class USoilDataAsset* SoilData) const;
 
 	// APawn interface
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
