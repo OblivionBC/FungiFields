@@ -217,3 +217,4 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Placement Data")
 	float CurrentRotationOffset = 0.0f;
 };
+

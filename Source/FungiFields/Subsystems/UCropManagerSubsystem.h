@@ -76,3 +76,4 @@ private:
 	/** Whether growth is currently paused */
 	bool bGrowthPaused = false;
 };
+

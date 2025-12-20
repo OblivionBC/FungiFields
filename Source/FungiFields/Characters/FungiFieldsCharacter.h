@@ -109,6 +109,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* ToggleQuestAction;
 
+	/** Toggle Backpack Input Action */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* ToggleBackpackAction;
+
 	/** Use Tool Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* UseToolAction;
@@ -164,6 +168,10 @@ public:
 	/** Quest Menu Widget class to create and display */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
 	TSubclassOf<UQuestMenu> QuestMenuClass;
+
+	/** Backpack Widget class to create and display */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
+	TSubclassOf<class UBackpackWidget> BackpackWidgetClass;
 	
 	/** Instance of the HUD widget */
 	UPROPERTY()
@@ -173,7 +181,12 @@ public:
 	UPROPERTY()
 	TObjectPtr<UQuestMenu> QuestMenuWidget;
 
+	/** Instance of the Backpack widget */
+	UPROPERTY()
+	TObjectPtr<class UBackpackWidget> BackpackWidget;
+
 	bool bQuestMenuVisible = false;
+	bool bBackpackVisible = false;
 
 public:
 	AFungiFieldsCharacter();
@@ -190,6 +203,12 @@ protected:
 
 	UFUNCTION()
 	void OnQuestMenuClosed();
+
+	UFUNCTION()
+	void ToggleBackpack(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void OnBackpackClosed();
 
 	UFUNCTION()
 	void OnItemEquipped(UItemDataAsset* Item, int32 SlotIndex);

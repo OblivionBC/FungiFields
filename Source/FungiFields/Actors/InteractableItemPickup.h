@@ -42,3 +42,4 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Pickup")
 	bool bSimulatePhysics = true;
 };
+

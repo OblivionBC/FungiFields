@@ -15,6 +15,7 @@
 #include "../Attributes/EconomyAttributeSet.h"
 #include "../Attributes/LevelAttributeSet.h"
 #include "../Widgets/PlayerHUDWidget.h"
+#include "../Widgets/UBackpackWidget.h"
 #include "Blueprint/UserWidget.h"
 #include "FungiFields/Components/LevelComponent.h"
 #include "FungiFields/Components/QuestComponent.h"
@@ -160,6 +161,19 @@ void AFungiFieldsCharacter::BeginPlay()
 				QuestMenuWidget->OnQuestMenuClosed.AddDynamic(this, &AFungiFieldsCharacter::OnQuestMenuClosed);
 			}
 		}
+
+		if (BackpackWidgetClass)
+		{
+			BackpackWidget = CreateWidget<UBackpackWidget>(GetWorld(), BackpackWidgetClass);
+			if (BackpackWidget)
+			{
+				BackpackWidget->SetOwningPlayer(PC);
+				BackpackWidget->AddToViewport();
+				BackpackWidget->SetVisibility(ESlateVisibility::Hidden);
+				// Bind to close delegate
+				BackpackWidget->OnBackpackClosed.AddDynamic(this, &AFungiFieldsCharacter::OnBackpackClosed);
+			}
+		}
 	}
 
 	if (FollowCamera)
@@ -235,6 +249,8 @@ void AFungiFieldsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 		}
 		
 		EnhancedInputComponent->BindAction(ToggleQuestAction, ETriggerEvent::Started, this, &AFungiFieldsCharacter::ToggleQuestMenu);
+
+		EnhancedInputComponent->BindAction(ToggleBackpackAction, ETriggerEvent::Started, this, &AFungiFieldsCharacter::ToggleBackpack);
 
 		if (InventoryComponent)
 		{
@@ -384,6 +400,52 @@ void AFungiFieldsCharacter::OnQuestMenuClosed()
 	QuestMenuWidget->SetVisibility(ESlateVisibility::Hidden);
 	bQuestMenuVisible = false;
 
+	FInputModeGameOnly Mode;
+	PC->SetInputMode(Mode);
+	PC->bShowMouseCursor = false;
+}
+
+void AFungiFieldsCharacter::ToggleBackpack(const FInputActionValue& Value)
+{
+	if (!BackpackWidget) 
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BackpackWidget not set!"));
+		return;
+	}
+
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC)
+		return;
+
+	if (!bBackpackVisible)
+	{
+		this->GetCharacterMovement()->StopMovementImmediately();
+		BackpackWidget->SetVisibility(ESlateVisibility::Visible);
+		bBackpackVisible = true;
+
+		FInputModeUIOnly Mode;
+		Mode.SetWidgetToFocus(BackpackWidget->TakeWidget());
+		PC->SetInputMode(Mode);
+		PC->bShowMouseCursor = true;
+	}
+	else
+	{
+		// Close via widget method (will broadcast delegate)
+		BackpackWidget->CloseBackpack();
+	}
+}
+
+void AFungiFieldsCharacter::OnBackpackClosed()
+{
+	if (!BackpackWidget)
+		return;
+
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC)
+		return;
+
+	BackpackWidget->SetVisibility(ESlateVisibility::Hidden);
+	bBackpackVisible = false;
 	FInputModeGameOnly Mode;
 	PC->SetInputMode(Mode);
 	PC->bShowMouseCursor = false;
