@@ -5,6 +5,7 @@
 #include "../Data/UToolDataAsset.h"
 #include "../Data/USeedDataAsset.h"
 #include "../Data/UCropDataAsset.h"
+#include "../Data/UItemDataAsset.h"
 #include "../Actors/ACropBase.h"
 #include "../Interfaces/IFarmableInterface.h"
 #include "../Interfaces/IHarvestableInterface.h"
@@ -88,6 +89,56 @@ bool UFarmingComponent::ExecuteFarmingAction(AActor* TargetActor, const FVector&
 	if (!TargetActor)
 	{
 		return false;
+	}
+
+	// Handle soil bag placement
+	if (UInventoryComponent* InventoryComp = GetOwner()->FindComponentByClass<UInventoryComponent>())
+	{
+		const int32 EquippedSlotIndex = InventoryComp->GetEquippedSlot();
+		if (EquippedSlotIndex != INDEX_NONE)
+		{
+			const TArray<FInventorySlot>& Slots = InventoryComp->GetInventorySlots();
+			if (Slots.IsValidIndex(EquippedSlotIndex))
+			{
+				const FInventorySlot& Slot = Slots[EquippedSlotIndex];
+				if (const UItemDataAsset* ItemData = Cast<const UItemDataAsset>(Slot.ItemDefinition))
+				{
+					if (ItemData->bIsSoilBag)
+					{
+						UE_LOG(LogTemp, Log, TEXT("UFarmingComponent: Soil bag detected in ExecuteFarmingAction"));
+						if (TargetActor->Implements<UFarmableInterface>())
+						{
+							UE_LOG(LogTemp, Log, TEXT("UFarmingComponent: Target implements IFarmableInterface"));
+							if (IFarmableInterface::Execute_CanAcceptSoilBag(TargetActor, const_cast<UItemDataAsset*>(ItemData)))
+							{
+								UE_LOG(LogTemp, Log, TEXT("UFarmingComponent: Can accept soil bag"));
+								if (IFarmableInterface::Execute_AddSoilFromBag(TargetActor, const_cast<UItemDataAsset*>(ItemData)))
+								{
+									UE_LOG(LogTemp, Log, TEXT("UFarmingComponent: Soil bag placed successfully"));
+									// Consume soil bag from inventory
+									InventoryComp->ConsumeFromSlot(EquippedSlotIndex, 1);
+									UpdateEquippedTool();
+									return true;
+								}
+								else
+								{
+									UE_LOG(LogTemp, Warning, TEXT("UFarmingComponent: AddSoilFromBag returned false"));
+								}
+							}
+							else
+							{
+								UE_LOG(LogTemp, Warning, TEXT("UFarmingComponent: CanAcceptSoilBag returned false"));
+							}
+						}
+						else
+						{
+							UE_LOG(LogTemp, Warning, TEXT("UFarmingComponent: Target does not implement IFarmableInterface"));
+						}
+						return false;
+					}
+				}
+			}
+		}
 	}
 
 	// Handle seed planting
@@ -421,8 +472,27 @@ void UFarmingComponent::TraceForFarmable()
 		return;
 	}
 
-	// Only show tooltip if we have a tool or seed equipped
-	if (!bHasValidTool && !bHasSeedEquipped)
+	// Only show tooltip if we have a tool, seed, or soil bag equipped
+	// Check for soil bag first
+	bool bHasSoilBagEquipped = false;
+	if (UInventoryComponent* InventoryComp = GetOwner()->FindComponentByClass<UInventoryComponent>())
+	{
+		const int32 EquippedSlotIndex = InventoryComp->GetEquippedSlot();
+		if (EquippedSlotIndex != INDEX_NONE)
+		{
+			const TArray<FInventorySlot>& Slots = InventoryComp->GetInventorySlots();
+			if (Slots.IsValidIndex(EquippedSlotIndex))
+			{
+				const FInventorySlot& Slot = Slots[EquippedSlotIndex];
+				if (const UItemDataAsset* ItemData = Cast<const UItemDataAsset>(Slot.ItemDefinition))
+				{
+					bHasSoilBagEquipped = ItemData->bIsSoilBag;
+				}
+			}
+		}
+	}
+
+	if (!bHasValidTool && !bHasSeedEquipped && !bHasSoilBagEquipped)
 	{
 		HideFarmingTooltip();
 		if (LastFarmableTarget && !IsValid(LastFarmableTarget))
@@ -474,8 +544,47 @@ void UFarmingComponent::TraceForFarmable()
 	FText TooltipText;
 	bool bShouldShowTooltip = false;
 
-	// Check for seed planting first (highest priority)
-	if (bHasSeedEquipped && EquippedSeedData && EquippedSeedData->CropToPlant && HitActor->Implements<UFarmableInterface>())
+	// Check for soil bag placement first (highest priority)
+	if (UInventoryComponent* InventoryComp = GetOwner()->FindComponentByClass<UInventoryComponent>())
+	{
+		const int32 EquippedSlotIndex = InventoryComp->GetEquippedSlot();
+		if (EquippedSlotIndex != INDEX_NONE)
+		{
+			const TArray<FInventorySlot>& Slots = InventoryComp->GetInventorySlots();
+			if (Slots.IsValidIndex(EquippedSlotIndex))
+			{
+				const FInventorySlot& Slot = Slots[EquippedSlotIndex];
+				if (const UItemDataAsset* ItemData = Cast<const UItemDataAsset>(Slot.ItemDefinition))
+				{
+					if (ItemData->bIsSoilBag)
+					{
+						UE_LOG(LogTemp, VeryVerbose, TEXT("UFarmingComponent::TraceForFarmable: Soil bag detected in tooltip trace"));
+						if (HitActor->Implements<UFarmableInterface>())
+						{
+							UE_LOG(LogTemp, VeryVerbose, TEXT("UFarmingComponent::TraceForFarmable: HitActor implements IFarmableInterface"));
+							if (IFarmableInterface::Execute_CanAcceptSoilBag(HitActor, const_cast<UItemDataAsset*>(ItemData)))
+							{
+								UE_LOG(LogTemp, VeryVerbose, TEXT("UFarmingComponent::TraceForFarmable: Can accept soil bag - showing tooltip"));
+								TooltipText = FText::FromString(TEXT("Left Click to Place Soil"));
+								bShouldShowTooltip = true;
+							}
+							else
+							{
+								UE_LOG(LogTemp, VeryVerbose, TEXT("UFarmingComponent::TraceForFarmable: Cannot accept soil bag"));
+							}
+						}
+						else
+						{
+							UE_LOG(LogTemp, VeryVerbose, TEXT("UFarmingComponent::TraceForFarmable: HitActor does not implement IFarmableInterface"));
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Check for seed planting (second priority)
+	if (!bShouldShowTooltip && bHasSeedEquipped && EquippedSeedData && EquippedSeedData->CropToPlant && HitActor->Implements<UFarmableInterface>())
 	{
 		if (IFarmableInterface::Execute_CanAcceptSeed(HitActor))
 		{

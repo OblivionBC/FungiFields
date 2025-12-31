@@ -215,6 +215,7 @@ protected:
 
 	UFUNCTION()
 	void OnSoilPlotPickedUp(AActor* Picker, class USoilDataAsset* SoilData);
+	void OnContainerPickedUp(AActor* Picker, class USoilContainerDataAsset* ContainerData);
 
 private:
 	/**
@@ -224,6 +225,14 @@ private:
 	 * @return Matching ItemDataAsset, or nullptr if not found
 	 */
 	class UItemDataAsset* FindItemDataAssetBySoilData(class USoilDataAsset* SoilData) const;
+
+	/**
+	 * Find an ItemDataAsset that matches the given ContainerDataAsset.
+	 * Searches through asset registry for placeable items.
+	 * @param ContainerData The container data asset to match
+	 * @return Matching ItemDataAsset, or nullptr if not found
+	 */
+	class UItemDataAsset* FindItemDataAssetByContainerData(class USoilContainerDataAsset* ContainerData) const;
 
 	// APawn interface
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;

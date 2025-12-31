@@ -5,6 +5,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "../Data/USoilDataAsset.h"
+#include "../Data/USoilContainerDataAsset.h"
 #include "../Actors/ACropBase.h"
 #include "../Data/UCropDataAsset.h"
 #include "../ENUM/EToolType.h"
@@ -12,10 +13,14 @@
 #include "../Interfaces/IHarvestableInterface.h"
 #include "../Data/FHarvestResult.h"
 #include "../Data/UToolDataAsset.h"
+#include "../ENUM/ESoilState.h"
+#include "../Data/UItemDataAsset.h"
 #include "Engine/World.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Particles/ParticleSystem.h"
 #include "Kismet/GameplayStatics.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Engine/StaticMesh.h"
 
 ASoilPlot::ASoilPlot()
 {
@@ -25,50 +30,114 @@ ASoilPlot::ASoilPlot()
 
 	SoilComponent = CreateDefaultSubobject<USoilComponent>(TEXT("SoilComponent"));
 
-	MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MeshComponent"));
-	MeshComponent->SetupAttachment(RootComponent);
+	ContainerMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ContainerMeshComponent"));
+	ContainerMeshComponent->SetupAttachment(RootComponent);
+
+	SoilMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SoilMeshComponent"));
+	SoilMeshComponent->SetupAttachment(RootComponent);
 
 	CropSpawnPoint = CreateDefaultSubobject<USceneComponent>(TEXT("CropSpawnPoint"));
 	CropSpawnPoint->SetupAttachment(RootComponent);
 	CropSpawnPoint->SetRelativeLocation(FVector(0.0f, 0.0f, 50.0f));
+
+	DynamicSoilMaterial = nullptr;
 }
 
 void ASoilPlot::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (SoilDataAsset)
+	if (ContainerDataAsset)
 	{
+		Initialize(ContainerDataAsset, SoilDataAsset);
+	}
+	else if (SoilDataAsset)
+	{
+		// Backward compatibility: if only soil data is set, initialize with it
 		Initialize(SoilDataAsset);
 	}
 }
 
-void ASoilPlot::Initialize(USoilDataAsset* InSoilData)
+void ASoilPlot::Initialize(USoilContainerDataAsset* InContainerData, USoilDataAsset* InSoilData)
 {
-	if (!InSoilData)
+	// Set container data and mesh
+	if (InContainerData)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ASoilPlot::Initialize: SoilDataAsset is null!"));
-		return;
+		ContainerDataAsset = InContainerData;
+		if (InContainerData->ContainerMesh && ContainerMeshComponent)
+		{
+			ContainerMeshComponent->SetStaticMesh(InContainerData->ContainerMesh);
+		}
 	}
 
+	// Initialize soil (can be nullptr for empty plots)
+	InitializeSoil(InSoilData);
+}
+
+void ASoilPlot::Initialize(USoilDataAsset* InSoilData)
+{
+	// This version only initializes soil, container should already be set
+	InitializeSoil(InSoilData);
+}
+
+void ASoilPlot::InitializeSoil(USoilDataAsset* InSoilData)
+{
 	SoilDataAsset = InSoilData;
 	SoilComponent->Initialize(InSoilData);
 
-	// Load and set mesh
-	if (InSoilData->SoilMesh) {
-		MeshComponent->SetStaticMesh(InSoilData->SoilMesh);
+	// Subscribe to soil component delegates (only if not already subscribed)
+	// RemoveDynamic will safely do nothing if not bound, so we can call it first to avoid duplicates
+	SoilComponent->OnSoilTilled.RemoveDynamic(this, &ASoilPlot::OnSoilTilled);
+	SoilComponent->OnSoilTilled.AddDynamic(this, &ASoilPlot::OnSoilTilled);
+	
+	SoilComponent->OnWaterLevelChanged.RemoveDynamic(this, &ASoilPlot::OnWaterLevelChanged);
+	SoilComponent->OnWaterLevelChanged.AddDynamic(this, &ASoilPlot::OnWaterLevelChanged);
+	
+	SoilComponent->OnCropPlanted.RemoveDynamic(this, &ASoilPlot::OnCropPlanted);
+	SoilComponent->OnCropPlanted.AddDynamic(this, &ASoilPlot::OnCropPlanted);
+	
+	SoilComponent->OnCropRemoved.RemoveDynamic(this, &ASoilPlot::OnCropRemoved);
+	SoilComponent->OnCropRemoved.AddDynamic(this, &ASoilPlot::OnCropRemoved);
+	
+	SoilComponent->OnSoilStateChanged.RemoveDynamic(this, &ASoilPlot::OnSoilStateChanged);
+	SoilComponent->OnSoilStateChanged.AddDynamic(this, &ASoilPlot::OnSoilStateChanged);
+
+	if (InSoilData)
+	{
+		// Create dynamic material instance from soil material
+		if (InSoilData->SoilMaterial && SoilMeshComponent)
+		{
+			DynamicSoilMaterial = UMaterialInstanceDynamic::Create(InSoilData->SoilMaterial, this);
+			if (DynamicSoilMaterial)
+			{
+				SoilMeshComponent->SetMaterial(0, DynamicSoilMaterial);
+				// Initialize wetness to 0
+				DynamicSoilMaterial->SetScalarParameterValue(TEXT("Wetness"), 0.0f);
+			}
+		}
+
+		// Show soil mesh
+		if (SoilMeshComponent)
+		{
+			SoilMeshComponent->SetVisibility(true);
+		}
+	}
+	else
+	{
+		// Hide soil mesh for empty plots
+		if (SoilMeshComponent)
+		{
+			SoilMeshComponent->SetVisibility(false);
+		}
+		DynamicSoilMaterial = nullptr;
 	}
 
-	// Subscribe to soil component delegates
-	SoilComponent->OnSoilTilled.AddDynamic(this, &ASoilPlot::OnSoilTilled);
-	SoilComponent->OnWaterLevelChanged.AddDynamic(this, &ASoilPlot::OnWaterLevelChanged);
-	SoilComponent->OnCropPlanted.AddDynamic(this, &ASoilPlot::OnCropPlanted);
-	SoilComponent->OnCropRemoved.AddDynamic(this, &ASoilPlot::OnCropRemoved);
+	UpdateVisuals();
 }
 
 bool ASoilPlot::InteractTool_Implementation(EToolType ToolType, AActor* Interactor, float ToolPower)
 {
-	if (!SoilComponent || !SoilDataAsset)
+	if (!SoilComponent)
 	{
 		return false;
 	}
@@ -86,13 +155,13 @@ bool ASoilPlot::InteractTool_Implementation(EToolType ToolType, AActor* Interact
 	switch (ToolType)
 	{
 	case EToolType::Hoe:
-		// Till the soil
-		if (SoilComponent->Till(ToolPower))
+		// Till the soil (only if soil is present)
+		if (SoilComponent->HasSoil() && SoilComponent->Till(ToolPower))
 		{
-			// Update mesh to tilled version if it was successfully tilled
-			if (SoilDataAsset->TilledMesh)
+			// Set material parameter for tilled state
+			if (DynamicSoilMaterial)
 			{
-				MeshComponent->SetStaticMesh(SoilDataAsset->TilledMesh);
+				DynamicSoilMaterial->SetScalarParameterValue(TEXT("IsTilled"), 1.0f);
 			}
 			bSuccess = true;
 			// Note: Soil tilled event is broadcast from UFarmingComponent::ExecuteFarmingAction
@@ -100,8 +169,8 @@ bool ASoilPlot::InteractTool_Implementation(EToolType ToolType, AActor* Interact
 		break;
 
 	case EToolType::WateringCan:
-		// Add water to soil (only if tilled)
-		if (SoilComponent->IsTilled())
+		// Add water to soil (only if tilled and soil is present)
+		if (SoilComponent->HasSoil() && SoilComponent->IsTilled())
 		{
 			SoilComponent->AddWater(ToolPower);
 			bSuccess = true;
@@ -223,6 +292,12 @@ FText ASoilPlot::GetInteractionText_Implementation() const
 		return FText::FromString("Soil");
 	}
 
+	// Check if plot is empty
+	if (!SoilComponent->HasSoil())
+	{
+		return FText::FromString("Empty Plot");
+	}
+
 	if (!SoilComponent->IsTilled())
 	{
 		return FText::FromString("Till Soil");
@@ -246,12 +321,12 @@ bool ASoilPlot::CanInteractWithTool_Implementation(EToolType ToolType, AActor* I
 	switch (ToolType)
 	{
 	case EToolType::Hoe:
-		// Hoe can only till untilled soil
-		return !SoilComponent->IsTilled();
+		// Hoe can only till untilled soil that has soil present
+		return SoilComponent->HasSoil() && !SoilComponent->IsTilled();
 
 	case EToolType::WateringCan:
-		// Watering can can only water tilled soil
-		return SoilComponent->IsTilled();
+		// Watering can can only water tilled soil that has soil present
+		return SoilComponent->HasSoil() && SoilComponent->IsTilled();
 
 	case EToolType::Scythe:
 		// Scythe can only harvest if there's a harvestable crop
@@ -278,9 +353,9 @@ FVector ASoilPlot::GetActionLocation_Implementation() const
 {
 	// Return the center of the soil plot, slightly above ground
 	FVector Location = GetActorLocation();
-	if (MeshComponent)
+	if (ContainerMeshComponent)
 	{
-		FBoxSphereBounds Bounds = MeshComponent->CalcBounds(MeshComponent->GetComponentTransform());
+		FBoxSphereBounds Bounds = ContainerMeshComponent->CalcBounds(ContainerMeshComponent->GetComponentTransform());
 		Location.Z = Bounds.Origin.Z + Bounds.BoxExtent.Z * 0.5f;
 	}
 	return Location;
@@ -315,7 +390,47 @@ ACropBase* ASoilPlot::SpawnCrop(UCropDataAsset* CropData)
 
 void ASoilPlot::UpdateVisuals()
 {
-	// Update material parameters based on water level
+	if (!SoilComponent || !SoilMeshComponent)
+	{
+		return;
+	}
+
+	// Hide soil mesh if no soil is present
+	if (!SoilComponent->HasSoil())
+	{
+		SoilMeshComponent->SetVisibility(false);
+		DynamicSoilMaterial = nullptr;
+		return;
+	}
+
+	// Show soil mesh
+	SoilMeshComponent->SetVisibility(true);
+
+	if (!SoilDataAsset || !DynamicSoilMaterial)
+	{
+		return;
+	}
+
+	// Calculate wetness amount (0.0 to 1.0 based on water level)
+	float WetAmount = 0.0f;
+	if (SoilDataAsset->MaxWaterLevel > 0.0f)
+	{
+		float CurrentWaterLevel = SoilComponent->GetWaterLevel();
+		WetAmount = FMath::Clamp(CurrentWaterLevel / SoilDataAsset->MaxWaterLevel, 0.0f, 1.0f);
+	}
+
+	// Set wetness parameter
+	DynamicSoilMaterial->SetScalarParameterValue(TEXT("Wetness"), WetAmount);
+
+	// Set tilled parameter
+	if (SoilComponent->IsTilled())
+	{
+		DynamicSoilMaterial->SetScalarParameterValue(TEXT("IsTilled"), 1.0f);
+	}
+	else
+	{
+		DynamicSoilMaterial->SetScalarParameterValue(TEXT("IsTilled"), 0.0f);
+	}
 }
 
 void ASoilPlot::OnSoilTilled(AActor* Soil)
@@ -336,5 +451,66 @@ void ASoilPlot::OnCropRemoved(AActor* Soil)
 void ASoilPlot::OnWaterLevelChanged(AActor* Soil, float NewWaterLevel)
 {
 	UpdateVisuals();
+}
+
+void ASoilPlot::OnSoilStateChanged(AActor* Soil, ESoilState NewState)
+{
+	UpdateVisuals();
+}
+
+bool ASoilPlot::CanAcceptSoilBag_Implementation(UItemDataAsset* SoilBagItem) const
+{
+	if (!SoilBagItem)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ASoilPlot::CanAcceptSoilBag: SoilBagItem is null"));
+		return false;
+	}
+	
+	if (!SoilBagItem->bIsSoilBag)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ASoilPlot::CanAcceptSoilBag: Item is not a soil bag"));
+		return false;
+	}
+	
+	if (!SoilBagItem->SoilBagSoilDataAsset)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ASoilPlot::CanAcceptSoilBag: SoilBagSoilDataAsset is null"));
+		return false;
+	}
+
+	if (!SoilComponent)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ASoilPlot::CanAcceptSoilBag: SoilComponent is null"));
+		return false;
+	}
+
+	bool bHasSoil = SoilComponent->HasSoil();
+	UE_LOG(LogTemp, Log, TEXT("ASoilPlot::CanAcceptSoilBag: HasSoil = %d"), bHasSoil);
+	
+	// Can only accept soil bag if plot is empty (no soil data asset)
+	return !bHasSoil;
+}
+
+bool ASoilPlot::AddSoilFromBag_Implementation(UItemDataAsset* SoilBagItem)
+{
+	UE_LOG(LogTemp, Log, TEXT("ASoilPlot::AddSoilFromBag called"));
+	
+	if (!CanAcceptSoilBag_Implementation(SoilBagItem))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ASoilPlot::AddSoilFromBag: CanAcceptSoilBag returned false"));
+		return false;
+	}
+	
+	if (!SoilBagItem->SoilBagSoilDataAsset)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ASoilPlot::AddSoilFromBag: SoilBagSoilDataAsset is null"));
+		return false;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("ASoilPlot::AddSoilFromBag: Initializing with soil data asset: %s"), *SoilBagItem->SoilBagSoilDataAsset->GetName());
+	
+	// Initialize the plot with the soil data from the bag
+	Initialize(SoilBagItem->SoilBagSoilDataAsset);
+	return true;
 }
 

@@ -26,13 +26,21 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UHorizontalBox> SlotsContainer;
 
+	/** Text block to display the name of the currently equipped item above the hotbar */
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> EquippedItemNameText;
+
 	virtual void NativeConstruct() override;
 
 private:
 	UFUNCTION()
 	void OnInventoryChanged();
 
+	UFUNCTION()
+	void OnItemEquipped(UItemDataAsset* Item, int32 SlotIndex);
+
 	void BindToInventoryComponent();
+	void UpdateEquippedItemName();
 
 	AFungiFieldsCharacter* GetPlayerCharacter() const;
 

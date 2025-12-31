@@ -79,5 +79,21 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Farming")
 	float GetInteractionRange() const;
+
+	/**
+	 * Check if this farmable can accept a soil bag.
+	 * @param SoilBagItem The soil bag item data asset
+	 * @return True if the soil bag can be placed
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Farming")
+	bool CanAcceptSoilBag(class UItemDataAsset* SoilBagItem) const;
+
+	/**
+	 * Add soil from a soil bag to this farmable.
+	 * @param SoilBagItem The soil bag item data asset
+	 * @return True if the soil was successfully added
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Farming")
+	bool AddSoilFromBag(class UItemDataAsset* SoilBagItem);
 };
 

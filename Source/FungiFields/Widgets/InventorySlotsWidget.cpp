@@ -38,13 +38,21 @@ void UInventorySlotsWidget::BindToInventoryComponent()
 	CachedInventoryComponent = InventoryComp;
 
 	InventoryComp->OnInventoryChanged.AddDynamic(this, &UInventorySlotsWidget::OnInventoryChanged);
+	InventoryComp->OnItemEquipped.AddDynamic(this, &UInventorySlotsWidget::OnItemEquipped);
 
 	UpdateSlotVisuals();
+	UpdateEquippedItemName();
 }
 
 void UInventorySlotsWidget::OnInventoryChanged()
 {
 	UpdateSlotVisuals();
+	UpdateEquippedItemName();
+}
+
+void UInventorySlotsWidget::OnItemEquipped(UItemDataAsset* Item, int32 SlotIndex)
+{
+	UpdateEquippedItemName();
 }
 
 void UInventorySlotsWidget::UpdateSlotVisuals()
@@ -253,6 +261,52 @@ void UInventorySlotsWidget::UpdateSlotWidget(UWidget* SlotWidget, const FInvento
 				ItemCount->SetVisibility(ESlateVisibility::Collapsed);
 			}
 		}
+	}
+}
+
+void UInventorySlotsWidget::UpdateEquippedItemName()
+{
+	if (!CachedInventoryComponent)
+	{
+		if (EquippedItemNameText)
+		{
+			EquippedItemNameText->SetText(FText::GetEmpty());
+			EquippedItemNameText->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		return;
+	}
+
+	const int32 EquippedSlotIndex = CachedInventoryComponent->GetEquippedSlot();
+	const TArray<FInventorySlot>& InventorySlots = CachedInventoryComponent->GetInventorySlots();
+
+	if (!EquippedItemNameText)
+	{
+		return;
+	}
+
+	// Check if there's an equipped slot with an item
+	if (EquippedSlotIndex != INDEX_NONE && 
+		InventorySlots.IsValidIndex(EquippedSlotIndex) && 
+		!InventorySlots[EquippedSlotIndex].IsEmpty() &&
+		InventorySlots[EquippedSlotIndex].ItemDefinition)
+	{
+		const FInventorySlot& EquippedSlot = InventorySlots[EquippedSlotIndex];
+		if (EquippedSlot.ItemDefinition)
+		{
+			EquippedItemNameText->SetText(EquippedSlot.ItemDefinition->ItemName);
+			EquippedItemNameText->SetVisibility(ESlateVisibility::Visible);
+		}
+		else
+		{
+			EquippedItemNameText->SetText(FText::GetEmpty());
+			EquippedItemNameText->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+	else
+	{
+		// No item equipped
+		EquippedItemNameText->SetText(FText::GetEmpty());
+		EquippedItemNameText->SetVisibility(ESlateVisibility::Collapsed);
 	}
 }
 

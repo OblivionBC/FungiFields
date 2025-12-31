@@ -123,24 +123,30 @@ void UChestWidget::UpdatePlayerSlots()
 		PlayerSlotWidgets.SetNum(PlayerSlotCount);
 	}
 
-	// Update all player slots
+	// Update all player slots - ensure every slot has a widget, even if empty
 	for (int32 i = 0; i < PlayerSlotCount; ++i)
 	{
 		UInventorySlotWidget* SlotWidget = GetOrCreatePlayerSlotWidget(i);
 		if (!SlotWidget)
 		{
+			UE_LOG(LogTemp, Warning, TEXT("UChestWidget: Failed to create player slot widget for slot %d"), i);
 			continue;
 		}
 
+		// Get slot data from inventory, or create empty slot if index is beyond inventory size
 		FInventorySlot SlotData;
 		if (i < InventorySlots.Num())
 		{
 			SlotData = InventorySlots[i];
 		}
+		// Else SlotData remains default (empty slot with ItemDefinition = nullptr, Count = 0)
 
 		const bool bIsEquipped = (i == EquippedSlotIndex && i < 9); // Only first 9 slots can be equipped (hotbar)
 		SlotWidget->SetSlotData(SlotData, i, bIsEquipped);
 		SlotWidget->SetInventorySource(0); // 0 = Player inventory
+		
+		// Ensure widget is visible even when empty
+		SlotWidget->SetVisibility(ESlateVisibility::Visible);
 	}
 }
 
@@ -168,23 +174,29 @@ void UChestWidget::UpdateChestSlots()
 		ChestSlotWidgets.SetNum(ChestSlotCount);
 	}
 
-	// Update all chest slots
+	// Update all chest slots - ensure every slot has a widget, even if empty
 	for (int32 i = 0; i < ChestSlotCount; ++i)
 	{
 		UInventorySlotWidget* SlotWidget = GetOrCreateChestSlotWidget(i);
 		if (!SlotWidget)
 		{
+			UE_LOG(LogTemp, Warning, TEXT("UChestWidget: Failed to create chest slot widget for slot %d"), i);
 			continue;
 		}
 
+		// Get slot data from inventory, or create empty slot if index is beyond inventory size
 		FInventorySlot SlotData;
 		if (i < InventorySlots.Num())
 		{
 			SlotData = InventorySlots[i];
 		}
+		// Else SlotData remains default (empty slot with ItemDefinition = nullptr, Count = 0)
 
 		SlotWidget->SetSlotData(SlotData, i, false); // Chest slots are never equipped
 		SlotWidget->SetInventorySource(1); // 1 = Chest inventory
+		
+		// Ensure widget is visible even when empty
+		SlotWidget->SetVisibility(ESlateVisibility::Visible);
 	}
 }
 
@@ -234,6 +246,9 @@ UInventorySlotWidget* UChestWidget::GetOrCreatePlayerSlotWidget(int32 SlotIndex)
 		return nullptr;
 	}
 
+	// Ensure widget is visible before adding to grid
+	SlotWidget->SetVisibility(ESlateVisibility::Visible);
+
 	// Add to grid first
 	UUniformGridSlot* GridSlot = PlayerInventoryGrid->AddChildToUniformGrid(SlotWidget);
 	if (GridSlot)
@@ -243,19 +258,18 @@ UInventorySlotWidget* UChestWidget::GetOrCreatePlayerSlotWidget(int32 SlotIndex)
 		GridSlot->SetRow(Row);
 		GridSlot->SetColumn(Column);
 	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UChestWidget: Failed to add player slot widget %d to grid"), SlotIndex);
+	}
 
 	// Store widget reference
 	PlayerSlotWidgets[SlotIndex] = SlotWidget;
 
-	// Bind delegates - ensure widget and this widget are valid
+	// Bind delegates only for newly created widgets (existing widgets return early above)
+	// No need to Clear() since this is a brand new widget with no bindings
 	if (IsValid(SlotWidget) && IsValid(this) && GetWorld())
 	{
-		// Clear any existing bindings first to avoid duplicates
-		SlotWidget->OnSlotClicked.Clear();
-		SlotWidget->OnDragStarted.Clear();
-		SlotWidget->OnSlotDropped.Clear();
-		
-		// Bind using AddDynamic - these functions are now marked as UFUNCTION
 		if (SlotWidget->IsValidLowLevel() && this->IsValidLowLevel())
 		{
 			SlotWidget->OnSlotClicked.AddDynamic(this, &UChestWidget::HandlePlayerSlotClicked);
@@ -313,6 +327,9 @@ UInventorySlotWidget* UChestWidget::GetOrCreateChestSlotWidget(int32 SlotIndex)
 		return nullptr;
 	}
 
+	// Ensure widget is visible before adding to grid
+	SlotWidget->SetVisibility(ESlateVisibility::Visible);
+
 	// Add to grid first
 	UUniformGridSlot* GridSlot = ChestInventoryGrid->AddChildToUniformGrid(SlotWidget);
 	if (GridSlot)
@@ -322,19 +339,18 @@ UInventorySlotWidget* UChestWidget::GetOrCreateChestSlotWidget(int32 SlotIndex)
 		GridSlot->SetRow(Row);
 		GridSlot->SetColumn(Column);
 	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UChestWidget: Failed to add chest slot widget %d to grid"), SlotIndex);
+	}
 
 	// Store widget reference
 	ChestSlotWidgets[SlotIndex] = SlotWidget;
 
-	// Bind delegates - ensure widget and this widget are valid
+	// Bind delegates only for newly created widgets (existing widgets return early above)
+	// No need to Clear() since this is a brand new widget with no bindings
 	if (IsValid(SlotWidget) && IsValid(this) && GetWorld())
 	{
-		// Clear any existing bindings first to avoid duplicates
-		SlotWidget->OnSlotClicked.Clear();
-		SlotWidget->OnDragStarted.Clear();
-		SlotWidget->OnSlotDropped.Clear();
-		
-		// Bind using AddDynamic - these functions are now marked as UFUNCTION
 		if (SlotWidget->IsValidLowLevel() && this->IsValidLowLevel())
 		{
 			SlotWidget->OnSlotClicked.AddDynamic(this, &UChestWidget::HandleChestSlotClicked);
@@ -437,4 +453,6 @@ bool UChestWidget::HandleItemTransfer(int32 SourceSlotIndex, int32 SourceInvento
 
 	return false;
 }
+
+
 

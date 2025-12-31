@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "../ENUM/ESoilState.h"
 #include "USoilComponent.generated.h"
 
 class USoilDataAsset;
@@ -118,6 +119,27 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Soil")
 	void RemoveCrop();
 
+	/**
+	 * Check if soil is present in the plot.
+	 * @return True if soil data asset is set
+	 */
+	UFUNCTION(BlueprintPure, Category = "Soil")
+	bool HasSoil() const { return SoilData != nullptr; }
+
+	/**
+	 * Set the soil type for this plot.
+	 * @param InSoilData The soil data asset to set
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Soil")
+	void SetSoilType(USoilDataAsset* InSoilData);
+
+	/**
+	 * Get the current soil state.
+	 * @return Empty if no soil, Dry if soil present but not watered, Wet if soil present and watered
+	 */
+	UFUNCTION(BlueprintPure, Category = "Soil")
+	ESoilState GetSoilState() const;
+
 	/** Delegate broadcast when soil is tilled */
 	UPROPERTY(BlueprintAssignable, Category = "Soil")
 	FOnSoilTilledState OnSoilTilled;
@@ -133,6 +155,11 @@ public:
 	/** Delegate broadcast when water level changes */
 	UPROPERTY(BlueprintAssignable, Category = "Soil")
 	FOnWaterLevelChanged OnWaterLevelChanged;
+
+	/** Delegate broadcast when soil state changes */
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoilStateChanged, AActor*, Soil, ESoilState, NewState);
+	UPROPERTY(BlueprintAssignable, Category = "Soil")
+	FOnSoilStateChanged OnSoilStateChanged;
 
 protected:
 	/**

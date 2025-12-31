@@ -28,3 +28,4 @@ public:
 	FInventorySlot SlotData;
 };
 
+

@@ -22,6 +22,7 @@
 #include "FungiFields/Components/UFarmingComponent.h"
 #include "FungiFields/Components/UPlacementComponent.h"
 #include "FungiFields/Data/USoilDataAsset.h"
+#include "FungiFields/Data/USoilContainerDataAsset.h"
 #include "FungiFields/Data/UItemDataAsset.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Engine/AssetManager.h"
@@ -201,6 +202,7 @@ void AFungiFieldsCharacter::BeginPlay()
 				InventoryComponent->OnItemEquipped.AddDynamic(this, &AFungiFieldsCharacter::OnItemEquipped);
 				// Subscribe to placeable picked up events to add item to inventory
 				PlacementComponent->OnPlaceablePickedUp.AddDynamic(this, &AFungiFieldsCharacter::OnSoilPlotPickedUp);
+				PlacementComponent->OnContainerPickedUp.AddDynamic(this, &AFungiFieldsCharacter::OnContainerPickedUp);
 			}
 		}
 	}
@@ -420,11 +422,15 @@ void AFungiFieldsCharacter::ToggleBackpack(const FInputActionValue& Value)
 	if (!bBackpackVisible)
 	{
 		this->GetCharacterMovement()->StopMovementImmediately();
+		
+		// Refresh inventory before showing to ensure all items are displayed
+		BackpackWidget->RefreshInventory();
+		
 		BackpackWidget->SetVisibility(ESlateVisibility::Visible);
 		bBackpackVisible = true;
 
 		FInputModeUIOnly Mode;
-		Mode.SetWidgetToFocus(BackpackWidget->TakeWidget());
+		Mode.SetLockMouseToViewport(true);
 		PC->SetInputMode(Mode);
 		PC->bShowMouseCursor = true;
 	}
@@ -494,6 +500,79 @@ void AFungiFieldsCharacter::OnSoilPlotPickedUp(AActor* Picker, USoilDataAsset* S
 			UE_LOG(LogTemp, Warning, TEXT("AFungiFieldsCharacter::OnSoilPlotPickedUp: No matching placeable item found for soil data asset '%s'. Item not added to inventory."), *SoilData->GetName());
 		}
 	}
+}
+
+void AFungiFieldsCharacter::OnContainerPickedUp(AActor* Picker, USoilContainerDataAsset* ContainerData)
+{
+	if (!InventoryComponent || !ContainerData)
+	{
+		return;
+	}
+
+	// Search inventory for an item that matches this container data asset
+	const TArray<FInventorySlot>& Slots = InventoryComponent->GetInventorySlots();
+	UItemDataAsset* MatchingItem = nullptr;
+
+	// First, try to find an existing item in inventory with matching PlaceableContainerDataAsset
+	for (const FInventorySlot& Slot : Slots)
+	{
+		if (!Slot.IsEmpty() && Slot.ItemDefinition && Slot.ItemDefinition->bIsPlaceable)
+		{
+			if (Slot.ItemDefinition->PlaceableContainerDataAsset == ContainerData)
+			{
+				MatchingItem = const_cast<UItemDataAsset*>(Slot.ItemDefinition.Get());
+				break;
+			}
+		}
+	}
+
+	// If we found a matching item, add it to inventory
+	if (MatchingItem)
+	{
+		InventoryComponent->TryAddItem(MatchingItem, 1);
+	}
+	else
+	{
+		// Try to find the item using Asset Registry
+		// This searches all loaded ItemDataAssets for one matching the container data
+		UItemDataAsset* FoundItem = FindItemDataAssetByContainerData(ContainerData);
+		if (FoundItem)
+		{
+			InventoryComponent->TryAddItem(FoundItem, 1);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("AFungiFieldsCharacter::OnContainerPickedUp: No matching placeable item found for container data asset '%s'. Item not added to inventory."), *ContainerData->GetName());
+		}
+	}
+}
+
+UItemDataAsset* AFungiFieldsCharacter::FindItemDataAssetByContainerData(USoilContainerDataAsset* ContainerData) const
+{
+	if (!ContainerData)
+	{
+		return nullptr;
+	}
+
+	// Use Asset Registry to find all ItemDataAssets
+	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+	IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
+	TArray<FAssetData> AssetDataList;
+	AssetRegistry.GetAssetsByClass(UItemDataAsset::StaticClass()->GetClassPathName(), AssetDataList, true);
+
+	// Search for an item that matches this container data
+	for (const FAssetData& AssetData : AssetDataList)
+	{
+		if (UItemDataAsset* ItemAsset = Cast<UItemDataAsset>(AssetData.GetAsset()))
+		{
+			if (ItemAsset && ItemAsset->bIsPlaceable && ItemAsset->PlaceableContainerDataAsset == ContainerData)
+			{
+				return ItemAsset;
+			}
+		}
+	}
+
+	return nullptr;
 }
 
 UItemDataAsset* AFungiFieldsCharacter::FindItemDataAssetBySoilData(USoilDataAsset* SoilData) const

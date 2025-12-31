@@ -7,6 +7,7 @@
 class UCameraComponent;
 class UItemDataAsset;
 class USoilDataAsset;
+class USoilContainerDataAsset;
 class ASoilPlot;
 class UMaterialInterface;
 class UUserWidget;
@@ -91,6 +92,11 @@ public:
 	/** Delegate broadcast when a placeable item is picked up */
 	UPROPERTY(BlueprintAssignable, Category = "Placement Events")
 	FOnPlaceablePickedUp OnPlaceablePickedUp;
+
+	/** Delegate broadcast when a container is picked up */
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnContainerPickedUp, AActor*, Picker, USoilContainerDataAsset*, ContainerData);
+	UPROPERTY(BlueprintAssignable, Category = "Placement Events")
+	FOnContainerPickedUp OnContainerPickedUp;
 
 protected:
 	/**
@@ -217,4 +223,6 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Placement Data")
 	float CurrentRotationOffset = 0.0f;
 };
+
+
 

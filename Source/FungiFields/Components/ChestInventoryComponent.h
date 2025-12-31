@@ -19,3 +19,4 @@ public:
 protected:
 	virtual void PostInitProperties() override;
 };
+

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "Materials/MaterialInterface.h"
 #include "USoilDataAsset.generated.h"
 
 /**
@@ -36,11 +37,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Soil Properties", meta = (ClampMin = "0.0"))
 	float MaxWaterLevel = 100.0f;
 
-	/** Visual representation of the soil */
+	/** Material for the soil mesh */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Soil Visuals")
-	UStaticMesh* SoilMesh;
-
-	/** Visual representation when tilled */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Soil Visuals")
-	UStaticMesh* TilledMesh;
+	TObjectPtr<UMaterialInterface> SoilMaterial;
 };

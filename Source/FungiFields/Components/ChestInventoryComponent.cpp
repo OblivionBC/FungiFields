@@ -26,3 +26,4 @@ void UChestInventoryComponent::PostInitProperties()
 	// but we've already set replication, so it won't set it again (it's idempotent)
 	Super::PostInitProperties();
 }
+

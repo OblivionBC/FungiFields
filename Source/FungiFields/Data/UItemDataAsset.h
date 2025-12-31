@@ -5,6 +5,7 @@
 #include "UItemDataAsset.generated.h"
 
 class USoilDataAsset;
+class USoilContainerDataAsset;
 class ASoilPlot;
 class AActor;
 
@@ -34,12 +35,16 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties")
 	UStaticMesh* ItemMesh;
 
-	/** If true, this item can be placed in the world (e.g., soil plots) */
+	/** If true, this item can be placed in the world (e.g., soil containers) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Placement")
 	bool bIsPlaceable = false;
 
-	/** The soil type to place (only used if bIsPlaceable is true) */
+	/** The container data asset to use when placing (only used if bIsPlaceable is true) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Placement", meta = (EditCondition = "bIsPlaceable"))
+	TObjectPtr<USoilContainerDataAsset> PlaceableContainerDataAsset;
+
+	/** The soil type to place (deprecated - use PlaceableContainerDataAsset instead) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Placement", meta = (EditCondition = "bIsPlaceable", DeprecatedProperty, DeprecationMessage = "Use PlaceableContainerDataAsset instead"))
 	TObjectPtr<USoilDataAsset> PlaceableSoilDataAsset;
 
 	/** Actor class to spawn when placing (defaults to ASoilPlot for soil items, but can be any actor for cosmetics, etc.) */
@@ -53,5 +58,13 @@ public:
 	/** Vertical offset for preview placement */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Placement", meta = (EditCondition = "bIsPlaceable"))
 	float PreviewOffsetZ = 0.0f;
+
+	/** If true, this item is a soil bag that can be placed into empty soil plots */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Soil Bag")
+	bool bIsSoilBag = false;
+
+	/** The soil data asset this bag contains (only used if bIsSoilBag is true) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Soil Bag", meta = (EditCondition = "bIsSoilBag"))
+	TObjectPtr<USoilDataAsset> SoilBagSoilDataAsset;
 };
 

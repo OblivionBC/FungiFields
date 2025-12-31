@@ -2,6 +2,7 @@
 #include "Camera/CameraComponent.h"
 #include "../Data/UItemDataAsset.h"
 #include "../Data/USoilDataAsset.h"
+#include "../Data/USoilContainerDataAsset.h"
 #include "../Actors/ASoilPlot.h"
 #include "../Components/InventoryComponent.h"
 #include "../Widgets/InteractionWidget.h"
@@ -152,17 +153,31 @@ void UPlacementComponent::PickupItem(const FInputActionValue& Value)
 		ASoilPlot* HitSoilPlot = Cast<ASoilPlot>(HitResult.GetActor());
 		if (HitSoilPlot)
 		{
-			// Get the soil data asset from the soil plot
-			USoilDataAsset* SoilData = HitSoilPlot->GetSoilDataAsset();
-			if (!SoilData && HitSoilPlot->GetSoilComponent())
+			// Get the container data asset from the soil plot
+			USoilContainerDataAsset* ContainerData = HitSoilPlot->GetContainerDataAsset();
+			
+			// Fallback to old system: try to get soil data if no container data
+			if (!ContainerData)
 			{
-				SoilData = HitSoilPlot->GetSoilComponent()->GetSoilData();
-			}
+				USoilDataAsset* SoilData = HitSoilPlot->GetSoilDataAsset();
+				if (!SoilData && HitSoilPlot->GetSoilComponent())
+				{
+					SoilData = HitSoilPlot->GetSoilComponent()->GetSoilData();
+				}
 
-			if (SoilData)
+				if (SoilData)
+				{
+					// Broadcast old delegate for backward compatibility
+					OnPlaceablePickedUp.Broadcast(GetOwner(), SoilData);
+					
+					// Destroy the placeable actor
+					HitSoilPlot->Destroy();
+				}
+			}
+			else
 			{
-				// Broadcast delegate - let subscribers handle adding item to inventory
-				OnPlaceablePickedUp.Broadcast(GetOwner(), SoilData);
+				// Broadcast new container delegate
+				OnContainerPickedUp.Broadcast(GetOwner(), ContainerData);
 				
 				// Destroy the placeable actor
 				HitSoilPlot->Destroy();
@@ -342,12 +357,21 @@ void UPlacementComponent::PlaceItemAtLocation(const FVector& Location, const FRo
 	AActor* NewPlaceable = GetWorld()->SpawnActor<AActor>(PlaceableClass, Location, Rotation, SpawnParams);
 	if (NewPlaceable)
 	{
-		// If it's a soil plot, initialize it with the soil data asset
+		// If it's a soil plot, initialize it with the container data asset (or nullptr for empty container)
 		if (ASoilPlot* NewSoilPlot = Cast<ASoilPlot>(NewPlaceable))
 		{
-			if (CurrentPlaceableItem->PlaceableSoilDataAsset)
+			// Initialize with container data asset and no soil (empty container)
+			USoilContainerDataAsset* ContainerData = CurrentPlaceableItem->PlaceableContainerDataAsset;
+			// Fallback to old system for backward compatibility
+			if (!ContainerData && CurrentPlaceableItem->PlaceableSoilDataAsset)
 			{
+				// Old system: if only soil data is provided, initialize with it (backward compatibility)
 				NewSoilPlot->Initialize(CurrentPlaceableItem->PlaceableSoilDataAsset);
+			}
+			else
+			{
+				// New system: initialize with container data and no soil
+				NewSoilPlot->Initialize(ContainerData, nullptr);
 			}
 		}
 
@@ -392,8 +416,8 @@ void UPlacementComponent::UpdatePreviewActor()
 	TSubclassOf<AActor> PreviewClass = CurrentPlaceableItem->PlaceableActorClass;
 	if (!PreviewClass)
 	{
-		// If PlaceableSoilDataAsset is set, default to ASoilPlot
-		if (CurrentPlaceableItem->PlaceableSoilDataAsset)
+		// If PlaceableContainerDataAsset or PlaceableSoilDataAsset is set, default to ASoilPlot
+		if (CurrentPlaceableItem->PlaceableContainerDataAsset || CurrentPlaceableItem->PlaceableSoilDataAsset)
 		{
 			PreviewClass = ASoilPlot::StaticClass();
 		}
@@ -410,12 +434,21 @@ void UPlacementComponent::UpdatePreviewActor()
 	PreviewActor = GetWorld()->SpawnActor<AActor>(PreviewClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
 	if (PreviewActor)
 	{
-		// If it's a soil plot, initialize with soil data for mesh
+		// If it's a soil plot, initialize with container data for mesh (or nullptr for empty container preview)
 		if (ASoilPlot* SoilPlotPreview = Cast<ASoilPlot>(PreviewActor))
 		{
-			if (CurrentPlaceableItem->PlaceableSoilDataAsset)
+			// Initialize with container data asset and no soil (empty container preview)
+			USoilContainerDataAsset* ContainerData = CurrentPlaceableItem->PlaceableContainerDataAsset;
+			// Fallback to old system for backward compatibility
+			if (!ContainerData && CurrentPlaceableItem->PlaceableSoilDataAsset)
 			{
+				// Old system: if only soil data is provided, initialize with it (backward compatibility)
 				SoilPlotPreview->Initialize(CurrentPlaceableItem->PlaceableSoilDataAsset);
+			}
+			else
+			{
+				// New system: initialize with container data and no soil
+				SoilPlotPreview->Initialize(ContainerData, nullptr);
 			}
 		}
 

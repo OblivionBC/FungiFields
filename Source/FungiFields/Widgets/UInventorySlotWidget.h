@@ -72,6 +72,9 @@ protected:
 	/** Update visual representation of the slot */
 	void UpdateSlotVisuals();
 
+	/** Create widget structure programmatically if Blueprint structure is missing */
+	void CreateWidgetStructure();
+
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UBorder> SlotBorder;
 
@@ -88,4 +91,6 @@ private:
 	bool bIsEquipped = false;
 	bool bIsDragTarget = false;
 };
+
+
 

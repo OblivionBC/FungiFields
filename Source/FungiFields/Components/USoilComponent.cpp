@@ -34,16 +34,18 @@ void USoilComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void USoilComponent::Initialize(USoilDataAsset* InSoilData)
 {
-	if (!InSoilData)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("USoilComponent::Initialize: SoilData is null!"));
-		return;
-	}
-
+	// Allow nullptr for empty plots
 	SoilData = InSoilData;
 	CurrentWaterLevel = 0.0f;
 	bIsTilled = false;
 	HeldCrop = nullptr;
+	TillProgress = 0.0f;
+	
+	if (InSoilData)
+	{
+		// Broadcast state change if soil was added
+		OnSoilStateChanged.Broadcast(GetOwner(), GetSoilState());
+	}
 }
 
 float USoilComponent::GetEffectiveFertility() const
@@ -63,6 +65,7 @@ void USoilComponent::AddWater(float Amount)
 		return;
 	}
 
+	ESoilState OldState = GetSoilState();
 	float OldWaterLevel = CurrentWaterLevel;
 	CurrentWaterLevel = FMath::Clamp(CurrentWaterLevel + Amount, 0.0f, SoilData->MaxWaterLevel);
 	UE_LOG(LogTemp, Display, TEXT("Water level at %f"), CurrentWaterLevel);
@@ -85,6 +88,14 @@ void USoilComponent::AddWater(float Amount)
 	if (FMath::Abs(CurrentWaterLevel - OldWaterLevel) > 0.01f)
 	{
 		OnWaterLevelChanged.Broadcast(GetOwner(), CurrentWaterLevel);
+		
+		// Broadcast state change if it changed
+		ESoilState NewState = GetSoilState();
+		if (OldState != NewState)
+		{
+			OnSoilStateChanged.Broadcast(GetOwner(), NewState);
+		}
+		
 		UpdateVisuals();
 	}
 }
@@ -96,6 +107,7 @@ bool USoilComponent::ConsumeWater(float Amount)
 		return false;
 	}
 
+	ESoilState OldState = GetSoilState();
 	float OldWaterLevel = CurrentWaterLevel;
 	CurrentWaterLevel = FMath::Max(0.0f, CurrentWaterLevel - Amount);
 
@@ -112,6 +124,14 @@ bool USoilComponent::ConsumeWater(float Amount)
 	if (FMath::Abs(CurrentWaterLevel - OldWaterLevel) > 0.01f)
 	{
 		OnWaterLevelChanged.Broadcast(GetOwner(), CurrentWaterLevel);
+		
+		// Broadcast state change if it changed
+		ESoilState NewState = GetSoilState();
+		if (OldState != NewState)
+		{
+			OnSoilStateChanged.Broadcast(GetOwner(), NewState);
+		}
+		
 		UpdateVisuals();
 	}
 
@@ -134,6 +154,12 @@ void USoilComponent::SetCrop(ACropBase* Crop)
 
 bool USoilComponent::Till(const float TillPower)
 {
+	// Can only till if soil is present
+	if (!HasSoil())
+	{
+		return false;
+	}
+
 	if (bIsTilled)
 	{
 		return true;
@@ -152,7 +178,7 @@ bool USoilComponent::Till(const float TillPower)
 
 bool USoilComponent::CanAcceptCrop() const
 {
-	return bIsTilled && HeldCrop == nullptr;
+	return HasSoil() && bIsTilled && HeldCrop == nullptr;
 }
 
 void USoilComponent::RemoveCrop()
@@ -180,6 +206,41 @@ void USoilComponent::OnWaterEvaporationTimer()
 	// Calculate evaporation based on retention multiplier
 	float EvaporationAmount = WaterEvaporationRate / SoilData->WaterRetentionMultiplier;
 	ConsumeWater(EvaporationAmount * EvaporationCheckInterval);
+}
+
+void USoilComponent::SetSoilType(USoilDataAsset* InSoilData)
+{
+	if (!InSoilData)
+	{
+		return;
+	}
+
+	ESoilState OldState = GetSoilState();
+	SoilData = InSoilData;
+	CurrentWaterLevel = 0.0f;
+	bIsTilled = false;
+	TillProgress = 0.0f;
+	
+	ESoilState NewState = GetSoilState();
+	if (OldState != NewState)
+	{
+		OnSoilStateChanged.Broadcast(GetOwner(), NewState);
+	}
+}
+
+ESoilState USoilComponent::GetSoilState() const
+{
+	if (!HasSoil())
+	{
+		return ESoilState::Empty;
+	}
+
+	if (CurrentWaterLevel > 0.0f)
+	{
+		return ESoilState::Wet;
+	}
+
+	return ESoilState::Dry;
 }
 
 void USoilComponent::UpdateVisuals()

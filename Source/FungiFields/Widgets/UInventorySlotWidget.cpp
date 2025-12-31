@@ -8,6 +8,8 @@
 #include "Blueprint/DragDropOperation.h"
 #include "Slate/SlateBrushAsset.h"
 #include "Components/UniformGridPanel.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "Blueprint/WidgetTree.h"
 
 UInventorySlotWidget::UInventorySlotWidget(const FObjectInitializer& ObjectInitializer)
@@ -56,6 +58,12 @@ void UInventorySlotWidget::NativeConstruct()
 		});
 	}
 	
+	// If SlotBorder still not found, create widget structure programmatically
+	if (!SlotBorder)
+	{
+		CreateWidgetStructure();
+	}
+	
 	UpdateSlotVisuals();
 }
 
@@ -73,6 +81,69 @@ void UInventorySlotWidget::SetEquipped(bool bInIsEquipped)
 	UpdateSlotVisuals();
 }
 
+void UInventorySlotWidget::CreateWidgetStructure()
+{
+	// Create widget structure programmatically if Blueprint structure is missing
+	// This allows the widget to work when created programmatically
+	
+	// Create Border as root widget
+	SlotBorder = NewObject<UBorder>(this);
+	SlotBorder->SetPadding(FMargin(2.0f));
+	
+	FSlateBrush DefaultBrush;
+	DefaultBrush.DrawAs = ESlateBrushDrawType::Box;
+	DefaultBrush.Margin = FMargin(2.0f);
+	DefaultBrush.TintColor = FSlateColor(FLinearColor(0.3f, 0.3f, 0.3f, 1.0f));
+	SlotBorder->SetBrush(DefaultBrush);
+	SlotBorder->SetBrushColor(FLinearColor::White);
+	
+	// Create Overlay to hold icon and count
+	UOverlay* SlotOverlay = NewObject<UOverlay>(this);
+	
+	// Create ItemIcon if not found
+	if (!ItemIcon)
+	{
+		ItemIcon = NewObject<UImage>(this);
+		ItemIcon->SetBrushFromTexture(nullptr);
+		ItemIcon->SetVisibility(ESlateVisibility::Collapsed);
+		ItemIcon->SetBrushTintColor(FSlateColor(FLinearColor::White));
+	}
+	
+	// Create ItemCount if not found
+	if (!ItemCount)
+	{
+		ItemCount = NewObject<UTextBlock>(this);
+		ItemCount->SetText(FText::GetEmpty());
+		ItemCount->SetVisibility(ESlateVisibility::Collapsed);
+		ItemCount->SetJustification(ETextJustify::Right);
+	}
+	
+	// Add icon and count to overlay
+	UOverlaySlot* IconSlot = SlotOverlay->AddChildToOverlay(ItemIcon);
+	if (IconSlot)
+	{
+		IconSlot->SetHorizontalAlignment(HAlign_Fill);
+		IconSlot->SetVerticalAlignment(VAlign_Fill);
+	}
+	
+	UOverlaySlot* CountSlot = SlotOverlay->AddChildToOverlay(ItemCount);
+	if (CountSlot)
+	{
+		CountSlot->SetHorizontalAlignment(HAlign_Right);
+		CountSlot->SetVerticalAlignment(VAlign_Bottom);
+		CountSlot->SetPadding(FMargin(4.0f));
+	}
+	
+	// Add overlay to border
+	SlotBorder->AddChild(SlotOverlay);
+	
+	// Set as root widget
+	if (WidgetTree)
+	{
+		WidgetTree->RootWidget = SlotBorder;
+	}
+}
+
 void UInventorySlotWidget::UpdateSlotVisuals()
 {
 	// Ensure we have the border widget - it's required for visual display
@@ -82,9 +153,13 @@ void UInventorySlotWidget::UpdateSlotVisuals()
 		SlotBorder = Cast<UBorder>(GetRootWidget());
 		if (!SlotBorder)
 		{
-			// Log warning but don't crash
-			UE_LOG(LogTemp, Warning, TEXT("UInventorySlotWidget: SlotBorder widget not found! Make sure your Blueprint has a Border widget named 'SlotBorder' as the root."));
-			return;
+			// Create widget structure programmatically
+			CreateWidgetStructure();
+			if (!SlotBorder)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("UInventorySlotWidget: Failed to create SlotBorder widget!"));
+				return;
+			}
 		}
 	}
 
@@ -245,4 +320,6 @@ void UInventorySlotWidget::NativeOnDragLeave(const FDragDropEvent& InDragDropEve
 	bIsDragTarget = false;
 	UpdateSlotVisuals();
 }
+
+
 

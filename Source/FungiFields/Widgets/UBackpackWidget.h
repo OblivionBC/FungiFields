@@ -28,6 +28,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Backpack")
 	void CloseBackpack();
 
+	/** Refresh the inventory display - call this to update all slots */
+	UFUNCTION(BlueprintCallable, Category = "Backpack")
+	void RefreshInventory();
+
 	/** Delegate broadcast when backpack is closed */
 	UPROPERTY(BlueprintAssignable, Category = "Backpack")
 	FOnBackpackClosed OnBackpackClosed;
@@ -81,4 +85,5 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Backpack")
 	TSubclassOf<UInventorySlotWidget> SlotWidgetClass;
 };
+
 
