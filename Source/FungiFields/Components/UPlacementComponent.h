@@ -20,6 +20,7 @@ class AActor;
 // Delegate declarations for placement events
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnPlaceablePlaced, AActor*, Placer, AActor*, PlacedActor, UItemDataAsset*, PlaceableItem);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnPlaceablePickedUp, AActor*, Picker, USoilDataAsset*, SoilData);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnContainerPickedUp, AActor*, Picker, USoilContainerDataAsset*, ContainerData);
 
 /**
  * Component responsible for handling placement of any placeable items (e.g., soil plots, cosmetics, etc.).
@@ -94,7 +95,6 @@ public:
 	FOnPlaceablePickedUp OnPlaceablePickedUp;
 
 	/** Delegate broadcast when a container is picked up */
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnContainerPickedUp, AActor*, Picker, USoilContainerDataAsset*, ContainerData);
 	UPROPERTY(BlueprintAssignable, Category = "Placement Events")
 	FOnContainerPickedUp OnContainerPickedUp;
 
@@ -154,6 +154,14 @@ protected:
 	 */
 	void HidePlacementInstructions();
 
+	/**
+	 * Calculate the offset from the actor's root to the bottom of its bounding box.
+	 * This ensures the bottom of the actor aligns with the ground when placed.
+	 * @param Actor The actor to calculate bounds for
+	 * @return The Z offset from actor root to bottom of bounding box (negative value)
+	 */
+	float CalculateActorBottomOffset(AActor* Actor) const;
+
 	/** Widget class to display placement instructions */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Placement Settings")
 	TSubclassOf<UUserWidget> PlacementInstructionWidgetClass;
@@ -207,9 +215,13 @@ private:
 	UPROPERTY()
 	TObjectPtr<UUserWidget> PlacementInstructionWidget = nullptr;
 
-	/** Current preview location */
+	/** Current preview location (actor root location) */
 	UPROPERTY(VisibleAnywhere, Category = "Placement Data")
 	FVector PreviewLocation = FVector::ZeroVector;
+
+	/** Target bottom location where the bottom of the actor should align */
+	UPROPERTY(VisibleAnywhere, Category = "Placement Data")
+	FVector TargetBottomLocation = FVector::ZeroVector;
 
 	/** Current preview rotation */
 	UPROPERTY(VisibleAnywhere, Category = "Placement Data")
@@ -222,6 +234,14 @@ private:
 	/** Current rotation offset (adjusted by scroll wheel) */
 	UPROPERTY(VisibleAnywhere, Category = "Placement Data")
 	float CurrentRotationOffset = 0.0f;
+
+	/** Cached bottom offset for the current preview actor (reused for placement) */
+	UPROPERTY(VisibleAnywhere, Category = "Placement Data")
+	float CachedBottomOffset = 0.0f;
+
+	/** Whether the bottom offset has been calculated and cached */
+	UPROPERTY(VisibleAnywhere, Category = "Placement Data")
+	bool bBottomOffsetCached = false;
 };
 
 

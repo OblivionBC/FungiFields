@@ -1,7 +1,6 @@
 #include "InteractableItemPickup.h"
 #include "../Data/UItemDataAsset.h"
 #include "../Components/InventoryComponent.h"
-#include "Components/SphereComponent.h"
 #include "Components/WidgetComponent.h"
 
 AInteractableItemPickup::AInteractableItemPickup()
@@ -32,17 +31,9 @@ void AInteractableItemPickup::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Enable physics simulation (can be overridden by bSimulatePhysics)
 	if (Mesh)
 	{
 		Mesh->SetSimulatePhysics(bSimulatePhysics);
-		
-		// Weld the proximity sphere to the physics body so it moves with the mesh
-		// This must be done after physics simulation is enabled
-		if (Proximity && bSimulatePhysics)
-		{
-			Proximity->WeldTo(Mesh);
-		}
 	}
 }
 
@@ -81,21 +72,20 @@ void AInteractableItemPickup::TryPickupItem(AActor* PickerUpper)
 		return;
 	}
 
-	// Check if the actor has an inventory component
 	UInventoryComponent* Inventory = PickerUpper->FindComponentByClass<UInventoryComponent>();
 	if (!Inventory)
 	{
 		return;
 	}
 
-	// Try to add the item to inventory
 	bool bSuccess = Inventory->TryAddItem(ItemDataAsset, ItemAmount);
 
-	// If successfully added, destroy the pickup
 	if (bSuccess)
 	{
 		Destroy();
 	}
 }
+
+
 
 

@@ -7,7 +7,6 @@ void UCropManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 
-	// Start the global growth update timer
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().SetTimer(
@@ -22,7 +21,6 @@ void UCropManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UCropManagerSubsystem::Deinitialize()
 {
-	// Clear timer when subsystem is deinitialized
 	if (UWorld* World = GetWorld())
 	{
 		if (GrowthUpdateTimerHandle.IsValid())
@@ -31,7 +29,6 @@ void UCropManagerSubsystem::Deinitialize()
 		}
 	}
 
-	// Clear all registered crops
 	RegisteredCrops.Empty();
 
 	Super::Deinitialize();
@@ -75,23 +72,20 @@ void UCropManagerSubsystem::OnGrowthUpdateTimer()
 		return;
 	}
 
-	// Update all registered crops
-	// Use a copy of the set to avoid issues if crops unregister during iteration
 	TArray<TObjectPtr<UCropGrowthComponent>> CropsToUpdate(RegisteredCrops.Array());
 
 	for (UCropGrowthComponent* GrowthComponent : CropsToUpdate)
 	{
 		if (IsValid(GrowthComponent))
 		{
-			// Call the growth update method on each component
 			GrowthComponent->UpdateGrowth(GrowthUpdateInterval);
 		}
 		else
 		{
-			// Remove invalid components
 			RegisteredCrops.Remove(GrowthComponent);
 		}
 	}
 }
+
 
 

@@ -8,6 +8,7 @@
 class UImage;
 class UTextBlock;
 class UBorder;
+class USizeBox;
 class UItemDataAsset;
 
 /**
@@ -65,6 +66,7 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;
 	virtual void NativeOnDragDetected(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent, UDragDropOperation*& OutOperation) override;
+	virtual bool NativeOnDragOver(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 	virtual bool NativeOnDrop(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 	virtual void NativeOnDragEnter(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 	virtual void NativeOnDragLeave(const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
@@ -90,7 +92,14 @@ private:
 	int32 InventorySourceID = 0; // 0 = Player, 1 = Chest, etc.
 	bool bIsEquipped = false;
 	bool bIsDragTarget = false;
+
+	TObjectPtr<UBorder> CachedDragVisual;
+	TObjectPtr<UImage> CachedDragIcon;
+	TObjectPtr<class USizeBox> CachedDragSizeBox;
+
+	void EnsureDragVisualCreated();
 };
+
 
 
 

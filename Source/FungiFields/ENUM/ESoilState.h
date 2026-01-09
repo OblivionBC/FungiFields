@@ -19,3 +19,4 @@ enum class ESoilState : uint8
 	Wet		UMETA(DisplayName = "Wet")
 };
 
+

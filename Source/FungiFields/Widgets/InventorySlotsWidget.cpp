@@ -284,7 +284,6 @@ void UInventorySlotsWidget::UpdateEquippedItemName()
 		return;
 	}
 
-	// Check if there's an equipped slot with an item
 	if (EquippedSlotIndex != INDEX_NONE && 
 		InventorySlots.IsValidIndex(EquippedSlotIndex) && 
 		!InventorySlots[EquippedSlotIndex].IsEmpty() &&
@@ -304,7 +303,6 @@ void UInventorySlotsWidget::UpdateEquippedItemName()
 	}
 	else
 	{
-		// No item equipped
 		EquippedItemNameText->SetText(FText::GetEmpty());
 		EquippedItemNameText->SetVisibility(ESlateVisibility::Collapsed);
 	}

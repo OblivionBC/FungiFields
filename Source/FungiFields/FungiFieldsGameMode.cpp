@@ -1,5 +1,3 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #include "FungiFieldsGameMode.h"
 #include "Characters/FungiFieldsCharacter.h"
 #include "UObject/ConstructorHelpers.h"

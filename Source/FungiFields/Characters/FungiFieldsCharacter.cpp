@@ -30,25 +30,17 @@
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
-//////////////////////////////////////////////////////////////////////////
-// AFungiFieldsCharacter
-
 AFungiFieldsCharacter::AFungiFieldsCharacter()
 {
-	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
 		
-	// Don't rotate when the controller rotates. Let that just affect the camera.
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationRoll = false;
 
-	// Configure character movement
-	GetCharacterMovement()->bOrientRotationToMovement = true; // Character moves in the direction of input...	
-	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f); // ...at this rotation rate
+	GetCharacterMovement()->bOrientRotationToMovement = true;
+	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
 
-	// Note: For faster iteration times these variables, and many more, can be tweaked in the Character Blueprint
-	// instead of recompiling to adjust them
 	GetCharacterMovement()->JumpZVelocity = 700.f;
 	GetCharacterMovement()->AirControl = 0.35f;
 	GetCharacterMovement()->MaxWalkSpeed = 500.f;
@@ -56,18 +48,15 @@ AFungiFieldsCharacter::AFungiFieldsCharacter()
 	GetCharacterMovement()->BrakingDecelerationWalking = 2000.f;
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
 
-	// Create a camera boom (pulls in towards the player if there is a collision)
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->TargetArmLength = 400.0f; // The camera follows at this distance behind the character	
-	CameraBoom->bUsePawnControlRotation = true; // Rotate the arm based on the controller
+	CameraBoom->TargetArmLength = 400.0f;
+	CameraBoom->bUsePawnControlRotation = true;
 
-	// Create a follow camera
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
-	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName); // Attach the camera to the end of the boom and let the boom adjust to match the controller orientation
-	FollowCamera->bUsePawnControlRotation = false; // Camera does not rotate relative to arm
+	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
+	FollowCamera->bUsePawnControlRotation = false;
 
-	// Components
 	InteractionComponent = CreateDefaultSubobject<UInteractionComponent>(TEXT("InteractionComponent"));
 	InventoryComponent = CreateDefaultSubobject<UInventoryComponent>(TEXT("InventoryComponent"));
 	AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
@@ -76,7 +65,6 @@ AFungiFieldsCharacter::AFungiFieldsCharacter()
 	FarmingComponent = CreateDefaultSubobject<UFarmingComponent>(TEXT("FarmingComponent"));
 	PlacementComponent = CreateDefaultSubobject<UPlacementComponent>(TEXT("PlacementComponent"));
 
-	// Attribute Sets
 	CharacterAttributeSet = CreateDefaultSubobject<UCharacterAttributeSet>(TEXT("CharacterAttributeSet"));
 	EconomyAttributeSet   = CreateDefaultSubobject<UEconomyAttributeSet>(TEXT("EconomyAttributeSet"));
 	LevelAttributeSet = CreateDefaultSubobject<ULevelAttributeSet>(TEXT("LevelAttributeSet"));
@@ -171,7 +159,6 @@ void AFungiFieldsCharacter::BeginPlay()
 				BackpackWidget->SetOwningPlayer(PC);
 				BackpackWidget->AddToViewport();
 				BackpackWidget->SetVisibility(ESlateVisibility::Hidden);
-				// Bind to close delegate
 				BackpackWidget->OnBackpackClosed.AddDynamic(this, &AFungiFieldsCharacter::OnBackpackClosed);
 			}
 		}
@@ -198,9 +185,7 @@ void AFungiFieldsCharacter::BeginPlay()
 			PlacementComponent->SetCamera(FollowCamera);
 			if (InventoryComponent)
 			{
-				// Subscribe to item equipped events to detect placeable items
 				InventoryComponent->OnItemEquipped.AddDynamic(this, &AFungiFieldsCharacter::OnItemEquipped);
-				// Subscribe to placeable picked up events to add item to inventory
 				PlacementComponent->OnPlaceablePickedUp.AddDynamic(this, &AFungiFieldsCharacter::OnSoilPlotPickedUp);
 				PlacementComponent->OnContainerPickedUp.AddDynamic(this, &AFungiFieldsCharacter::OnContainerPickedUp);
 			}
@@ -213,12 +198,8 @@ UAbilitySystemComponent* AFungiFieldsCharacter::GetAbilitySystemComponent() cons
 	return AbilitySystemComponent;
 }
 
-//////////////////////////////////////////////////////////////////////////
-// Input
-
 void AFungiFieldsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
-	// Add Input Mapping Context
 	if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
 	{
 		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
@@ -227,17 +208,13 @@ void AFungiFieldsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 		}
 	}
 	
-	// Set up action bindings
 	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent)) {
 		
-		// Jumping
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ACharacter::Jump);
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
 
-		// Moving
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AFungiFieldsCharacter::Move);
 
-		// Looking
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AFungiFieldsCharacter::Look);
 
 		if (InteractionComponent)
@@ -300,22 +277,16 @@ void AFungiFieldsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 
 void AFungiFieldsCharacter::Move(const FInputActionValue& Value)
 {
-	// input is a Vector2D
 	FVector2D MovementVector = Value.Get<FVector2D>();
 
 	if (Controller != nullptr)
 	{
-		// find out which way is forward
 		const FRotator Rotation = Controller->GetControlRotation();
 		const FRotator YawRotation(0, Rotation.Yaw, 0);
 
-		// get forward vector
 		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-	
-		// get right vector 
 		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
 
-		// add movement 
 		AddMovementInput(ForwardDirection, MovementVector.Y);
 		AddMovementInput(RightDirection, MovementVector.X);
 	}
@@ -323,12 +294,10 @@ void AFungiFieldsCharacter::Move(const FInputActionValue& Value)
 
 void AFungiFieldsCharacter::Look(const FInputActionValue& Value)
 {
-	// input is a Vector2D
 	FVector2D LookAxisVector = Value.Get<FVector2D>();
 
 	if (Controller != nullptr)
 	{
-		// add yaw and pitch input to controller
 		AddControllerYawInput(LookAxisVector.X);
 		AddControllerPitchInput(LookAxisVector.Y);
 	}
@@ -375,17 +344,27 @@ void AFungiFieldsCharacter::OnItemEquipped(UItemDataAsset* Item, int32 SlotIndex
 		return;
 	}
 
-	// Check if the equipped item is placeable
-	if (Item && Item->bIsPlaceable)
+	// If we're already in placement mode, check if we need to update or exit
+	if (PlacementComponent->IsInPlacementMode())
 	{
-		PlacementComponent->EnterPlacementMode(Item);
+		if (Item && Item->bIsPlaceable)
+		{
+			// Check if it's a different placeable item - if so, update placement mode
+			// EnterPlacementMode will handle updating the preview actor
+			PlacementComponent->EnterPlacementMode(Item);
+		}
+		else
+		{
+			// New item is not placeable, exit placement mode
+			PlacementComponent->ExitPlacementMode();
+		}
 	}
 	else
 	{
-		// Exit placement mode if item is not placeable
-		if (PlacementComponent->IsInPlacementMode())
+		// Not in placement mode - enter it if the new item is placeable
+		if (Item && Item->bIsPlaceable)
 		{
-			PlacementComponent->ExitPlacementMode();
+			PlacementComponent->EnterPlacementMode(Item);
 		}
 	}
 }
@@ -423,20 +402,23 @@ void AFungiFieldsCharacter::ToggleBackpack(const FInputActionValue& Value)
 	{
 		this->GetCharacterMovement()->StopMovementImmediately();
 		
-		// Refresh inventory before showing to ensure all items are displayed
+		if (!BackpackWidget->IsInViewport())
+		{
+			BackpackWidget->AddToViewport();
+		}
+		
 		BackpackWidget->RefreshInventory();
 		
 		BackpackWidget->SetVisibility(ESlateVisibility::Visible);
 		bBackpackVisible = true;
 
 		FInputModeUIOnly Mode;
-		Mode.SetLockMouseToViewport(true);
+		Mode.SetWidgetToFocus(BackpackWidget->TakeWidget());
 		PC->SetInputMode(Mode);
 		PC->bShowMouseCursor = true;
 	}
 	else
 	{
-		// Close via widget method (will broadcast delegate)
 		BackpackWidget->CloseBackpack();
 	}
 }
@@ -464,11 +446,9 @@ void AFungiFieldsCharacter::OnSoilPlotPickedUp(AActor* Picker, USoilDataAsset* S
 		return;
 	}
 
-	// Search inventory for an item that matches this soil data asset
 	const TArray<FInventorySlot>& Slots = InventoryComponent->GetInventorySlots();
 	UItemDataAsset* MatchingItem = nullptr;
 
-	// First, try to find an existing item in inventory with matching PlaceableSoilDataAsset
 	for (const FInventorySlot& Slot : Slots)
 	{
 		if (!Slot.IsEmpty() && Slot.ItemDefinition && Slot.ItemDefinition->bIsPlaceable)
@@ -481,15 +461,12 @@ void AFungiFieldsCharacter::OnSoilPlotPickedUp(AActor* Picker, USoilDataAsset* S
 		}
 	}
 
-	// If we found a matching item, add it to inventory
 	if (MatchingItem)
 	{
 		InventoryComponent->TryAddItem(MatchingItem, 1);
 	}
 	else
 	{
-		// Try to find the item using Asset Registry
-		// This searches all loaded ItemDataAssets for one matching the soil data
 		UItemDataAsset* FoundItem = FindItemDataAssetBySoilData(SoilData);
 		if (FoundItem)
 		{
@@ -509,11 +486,9 @@ void AFungiFieldsCharacter::OnContainerPickedUp(AActor* Picker, USoilContainerDa
 		return;
 	}
 
-	// Search inventory for an item that matches this container data asset
 	const TArray<FInventorySlot>& Slots = InventoryComponent->GetInventorySlots();
 	UItemDataAsset* MatchingItem = nullptr;
 
-	// First, try to find an existing item in inventory with matching PlaceableContainerDataAsset
 	for (const FInventorySlot& Slot : Slots)
 	{
 		if (!Slot.IsEmpty() && Slot.ItemDefinition && Slot.ItemDefinition->bIsPlaceable)
@@ -526,15 +501,12 @@ void AFungiFieldsCharacter::OnContainerPickedUp(AActor* Picker, USoilContainerDa
 		}
 	}
 
-	// If we found a matching item, add it to inventory
 	if (MatchingItem)
 	{
 		InventoryComponent->TryAddItem(MatchingItem, 1);
 	}
 	else
 	{
-		// Try to find the item using Asset Registry
-		// This searches all loaded ItemDataAssets for one matching the container data
 		UItemDataAsset* FoundItem = FindItemDataAssetByContainerData(ContainerData);
 		if (FoundItem)
 		{
@@ -554,13 +526,11 @@ UItemDataAsset* AFungiFieldsCharacter::FindItemDataAssetByContainerData(USoilCon
 		return nullptr;
 	}
 
-	// Use Asset Registry to find all ItemDataAssets
 	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
 	IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
 	TArray<FAssetData> AssetDataList;
 	AssetRegistry.GetAssetsByClass(UItemDataAsset::StaticClass()->GetClassPathName(), AssetDataList, true);
 
-	// Search for an item that matches this container data
 	for (const FAssetData& AssetData : AssetDataList)
 	{
 		if (UItemDataAsset* ItemAsset = Cast<UItemDataAsset>(AssetData.GetAsset()))
@@ -582,17 +552,14 @@ UItemDataAsset* AFungiFieldsCharacter::FindItemDataAssetBySoilData(USoilDataAsse
 		return nullptr;
 	}
 
-	// Use Asset Registry to find all ItemDataAsset instances
 	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
 	IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
 
 	TArray<FAssetData> AssetDataList;
 	AssetRegistry.GetAssetsByClass(UItemDataAsset::StaticClass()->GetClassPathName(), AssetDataList, true);
 
-	// Search through all ItemDataAssets for one matching the soil data
 	for (const FAssetData& AssetData : AssetDataList)
 	{
-		// Load the asset - GetAsset() will load it if not already loaded
 		UItemDataAsset* ItemAsset = Cast<UItemDataAsset>(AssetData.GetAsset());
 		
 		if (ItemAsset && ItemAsset->bIsPlaceable && ItemAsset->PlaceableSoilDataAsset == SoilData)

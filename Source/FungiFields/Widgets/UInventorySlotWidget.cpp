@@ -10,6 +10,7 @@
 #include "Components/UniformGridPanel.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
+#include "Components/SizeBox.h"
 #include "Blueprint/WidgetTree.h"
 
 UInventorySlotWidget::UInventorySlotWidget(const FObjectInitializer& ObjectInitializer)
@@ -21,16 +22,13 @@ void UInventorySlotWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 	
-	// Ensure border is found - try root widget if not bound
 	if (!SlotBorder)
 	{
 		SlotBorder = Cast<UBorder>(GetRootWidget());
 	}
 	
-	// Try to find ItemIcon and ItemCount if not bound
 	if (!ItemIcon && WidgetTree)
 	{
-		// Search for Image widget using WidgetTree
 		WidgetTree->ForEachWidget([this](UWidget* Widget)
 		{
 			if (!ItemIcon)
@@ -45,7 +43,6 @@ void UInventorySlotWidget::NativeConstruct()
 	
 	if (!ItemCount && WidgetTree)
 	{
-		// Search for TextBlock widget using WidgetTree
 		WidgetTree->ForEachWidget([this](UWidget* Widget)
 		{
 			if (!ItemCount)
@@ -58,7 +55,6 @@ void UInventorySlotWidget::NativeConstruct()
 		});
 	}
 	
-	// If SlotBorder still not found, create widget structure programmatically
 	if (!SlotBorder)
 	{
 		CreateWidgetStructure();
@@ -83,10 +79,6 @@ void UInventorySlotWidget::SetEquipped(bool bInIsEquipped)
 
 void UInventorySlotWidget::CreateWidgetStructure()
 {
-	// Create widget structure programmatically if Blueprint structure is missing
-	// This allows the widget to work when created programmatically
-	
-	// Create Border as root widget
 	SlotBorder = NewObject<UBorder>(this);
 	SlotBorder->SetPadding(FMargin(2.0f));
 	
@@ -97,10 +89,8 @@ void UInventorySlotWidget::CreateWidgetStructure()
 	SlotBorder->SetBrush(DefaultBrush);
 	SlotBorder->SetBrushColor(FLinearColor::White);
 	
-	// Create Overlay to hold icon and count
 	UOverlay* SlotOverlay = NewObject<UOverlay>(this);
 	
-	// Create ItemIcon if not found
 	if (!ItemIcon)
 	{
 		ItemIcon = NewObject<UImage>(this);
@@ -109,7 +99,6 @@ void UInventorySlotWidget::CreateWidgetStructure()
 		ItemIcon->SetBrushTintColor(FSlateColor(FLinearColor::White));
 	}
 	
-	// Create ItemCount if not found
 	if (!ItemCount)
 	{
 		ItemCount = NewObject<UTextBlock>(this);
@@ -118,7 +107,6 @@ void UInventorySlotWidget::CreateWidgetStructure()
 		ItemCount->SetJustification(ETextJustify::Right);
 	}
 	
-	// Add icon and count to overlay
 	UOverlaySlot* IconSlot = SlotOverlay->AddChildToOverlay(ItemIcon);
 	if (IconSlot)
 	{
@@ -134,10 +122,8 @@ void UInventorySlotWidget::CreateWidgetStructure()
 		CountSlot->SetPadding(FMargin(4.0f));
 	}
 	
-	// Add overlay to border
 	SlotBorder->AddChild(SlotOverlay);
 	
-	// Set as root widget
 	if (WidgetTree)
 	{
 		WidgetTree->RootWidget = SlotBorder;
@@ -146,14 +132,11 @@ void UInventorySlotWidget::CreateWidgetStructure()
 
 void UInventorySlotWidget::UpdateSlotVisuals()
 {
-	// Ensure we have the border widget - it's required for visual display
 	if (!SlotBorder)
 	{
-		// Try to find it if it wasn't bound
 		SlotBorder = Cast<UBorder>(GetRootWidget());
 		if (!SlotBorder)
 		{
-			// Create widget structure programmatically
 			CreateWidgetStructure();
 			if (!SlotBorder)
 			{
@@ -163,7 +146,6 @@ void UInventorySlotWidget::UpdateSlotVisuals()
 		}
 	}
 
-	// Update equipped state visual with border
 	if (bIsEquipped)
 	{
 		SlotBorder->SetBrushColor(FLinearColor::Yellow);
@@ -195,7 +177,6 @@ void UInventorySlotWidget::UpdateSlotVisuals()
 		SlotBorder->SetPadding(FMargin(2.0f));
 	}
 
-	// Update item icon
 	if (ItemIcon)
 	{
 		if (CurrentSlotData.IsEmpty() || !CurrentSlotData.ItemDefinition)
@@ -223,7 +204,6 @@ void UInventorySlotWidget::UpdateSlotVisuals()
 		}
 	}
 
-	// Update item count
 	if (ItemCount)
 	{
 		if (CurrentSlotData.Count > 1)
@@ -255,6 +235,50 @@ FReply UInventorySlotWidget::NativeOnMouseButtonDown(const FGeometry& MyGeometry
 	return FReply::Unhandled();
 }
 
+void UInventorySlotWidget::EnsureDragVisualCreated()
+{
+	if (CachedDragVisual && CachedDragSizeBox)
+	{
+		return;
+	}
+
+	if (!GetWorld())
+	{
+		return;
+	}
+
+	// Create SizeBox to control the drag visual size
+	CachedDragSizeBox = NewObject<USizeBox>(GetWorld());
+	if (!CachedDragSizeBox)
+	{
+		return;
+	}
+
+	// Create Border as the visual container
+	CachedDragVisual = NewObject<UBorder>(GetWorld());
+	if (!CachedDragVisual)
+	{
+		return;
+	}
+
+	FSlateBrush DefaultBrush;
+	DefaultBrush.DrawAs = ESlateBrushDrawType::Box;
+	DefaultBrush.Margin = FMargin(2.0f);
+	DefaultBrush.TintColor = FSlateColor(FLinearColor(0.3f, 0.3f, 0.3f, 1.0f));
+	CachedDragVisual->SetBrush(DefaultBrush);
+	CachedDragVisual->SetPadding(FMargin(2.0f));
+
+	// Create Image for the item icon
+	CachedDragIcon = NewObject<UImage>(GetWorld());
+	if (CachedDragIcon)
+	{
+		CachedDragVisual->AddChild(CachedDragIcon);
+	}
+
+	// Add Border to SizeBox
+	CachedDragSizeBox->AddChild(CachedDragVisual);
+}
+
 void UInventorySlotWidget::NativeOnDragDetected(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent, UDragDropOperation*& OutOperation)
 {
 	if (CurrentSlotData.IsEmpty())
@@ -262,7 +286,6 @@ void UInventorySlotWidget::NativeOnDragDetected(const FGeometry& MyGeometry, con
 		return;
 	}
 
-	// Create custom drag operation
 	UInventoryDragDropOperation* DragOperation = NewObject<UInventoryDragDropOperation>(GetWorld());
 	if (DragOperation)
 	{
@@ -270,10 +293,38 @@ void UInventorySlotWidget::NativeOnDragDetected(const FGeometry& MyGeometry, con
 		DragOperation->SourceInventoryID = InventorySourceID;
 		DragOperation->SlotData = CurrentSlotData;
 		
-		// Set default drag visual - create a simple visual representation
 		if (SlotBorder)
 		{
-			DragOperation->DefaultDragVisual = SlotBorder;
+			EnsureDragVisualCreated();
+			
+			if (CachedDragSizeBox && CachedDragVisual)
+			{
+				// Get the slot size from the geometry
+				FVector2D SlotSize = MyGeometry.GetLocalSize();
+				
+				// Set fixed size on the SizeBox to control drag visual size
+				CachedDragSizeBox->SetWidthOverride(SlotSize.X);
+				CachedDragSizeBox->SetHeightOverride(SlotSize.Y);
+				
+				// Update the visual appearance
+				CachedDragVisual->SetBrushColor(SlotBorder->GetBrushColor());
+				
+				if (CachedDragIcon && CurrentSlotData.ItemDefinition && CurrentSlotData.ItemDefinition->ItemIcon)
+				{
+					CachedDragIcon->SetBrushFromTexture(CurrentSlotData.ItemDefinition->ItemIcon, true);
+					CachedDragIcon->SetVisibility(ESlateVisibility::Visible);
+				}
+				else if (CachedDragIcon)
+				{
+					CachedDragIcon->SetVisibility(ESlateVisibility::Collapsed);
+				}
+				
+				DragOperation->DefaultDragVisual = CachedDragSizeBox;
+			}
+			else
+			{
+				DragOperation->DefaultDragVisual = SlotBorder;
+			}
 		}
 		else
 		{
@@ -281,17 +332,24 @@ void UInventorySlotWidget::NativeOnDragDetected(const FGeometry& MyGeometry, con
 		}
 		DragOperation->Pivot = EDragPivot::MouseDown;
 		
-		// Broadcast drag started event
 		OnDragStarted.Broadcast(SlotIndex, InventorySourceID, CurrentSlotData);
 		OutOperation = DragOperation;
 	}
+}
+
+bool UInventorySlotWidget::NativeOnDragOver(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
+{
+	if (Cast<UInventoryDragDropOperation>(InOperation))
+	{
+		return true;
+	}
+	return false;
 }
 
 bool UInventorySlotWidget::NativeOnDrop(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
 	if (UInventoryDragDropOperation* InventoryDragOp = Cast<UInventoryDragDropOperation>(InOperation))
 	{
-		// Broadcast drop event to parent widget
 		OnSlotDropped.Broadcast(
 			InventoryDragOp->SourceSlotIndex,
 			InventoryDragOp->SourceInventoryID,

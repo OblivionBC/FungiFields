@@ -1,5 +1,3 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -215,6 +213,8 @@ protected:
 
 	UFUNCTION()
 	void OnSoilPlotPickedUp(AActor* Picker, class USoilDataAsset* SoilData);
+
+	UFUNCTION()
 	void OnContainerPickedUp(AActor* Picker, class USoilContainerDataAsset* ContainerData);
 
 private:

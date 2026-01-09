@@ -10,13 +10,11 @@ bool UQuest::ShouldRespondToItemAdded(UItemDataAsset* Item, int32 Quantity) cons
 		return false;
 	}
 
-	// If no specific item required, respond to any item
 	if (!RequiredItem.IsValid())
 	{
 		return true;
 	}
 
-	// Check if the added item matches the required item
 	UItemDataAsset* RequiredItemPtr = RequiredItem.LoadSynchronous();
 	return RequiredItemPtr && Item == RequiredItemPtr;
 }
@@ -28,13 +26,11 @@ bool UQuest::ShouldRespondToCropHarvested(UCropDataAsset* CropData, int32 Quanti
 		return false;
 	}
 
-	// If no specific crop required, respond to any crop
 	if (!RequiredCrop.IsValid())
 	{
 		return true;
 	}
 
-	// Check if the harvested crop matches the required crop
 	UCropDataAsset* RequiredCropPtr = RequiredCrop.LoadSynchronous();
 	return RequiredCropPtr && CropData == RequiredCropPtr;
 }
@@ -46,13 +42,11 @@ bool UQuest::ShouldRespondToSeedPlanted(USeedDataAsset* SeedData) const
 		return false;
 	}
 
-	// If no specific seed required, respond to any seed
 	if (!RequiredSeed.IsValid())
 	{
 		return true;
 	}
 
-	// Check if the planted seed matches the required seed
 	USeedDataAsset* RequiredSeedPtr = RequiredSeed.LoadSynchronous();
 	return RequiredSeedPtr && SeedData == RequiredSeedPtr;
 }

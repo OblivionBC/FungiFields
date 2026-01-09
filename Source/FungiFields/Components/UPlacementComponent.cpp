@@ -17,6 +17,7 @@
 #include "Components/PrimitiveComponent.h"
 #include "Materials/MaterialInterface.h"
 #include "Blueprint/UserWidget.h"
+#include "Components/SceneComponent.h"
 
 UPlacementComponent::UPlacementComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -28,8 +29,11 @@ UPlacementComponent::UPlacementComponent(const FObjectInitializer& ObjectInitial
 	CurrentPlaceableItem = nullptr;
 	PreviewActor = nullptr;
 	PreviewLocation = FVector::ZeroVector;
+	TargetBottomLocation = FVector::ZeroVector;
 	PreviewRotation = FRotator::ZeroRotator;
 	bPreviewLocationValid = false;
+	CachedBottomOffset = 0.0f;
+	bBottomOffsetCached = false;
 	GroundTraceDistance = 1000.0f;
 	MinPlacementDistance = 50.0f;
 	PlacementCheckRadius = 50.0f;
@@ -65,11 +69,8 @@ void UPlacementComponent::EnterPlacementMode(UItemDataAsset* PlaceableItem)
 		return;
 	}
 
-	// Check if PlaceableActorClass is set
-	// For soil plots, PlaceableSoilDataAsset should also be set, but for other placeables it might be null
-	if (PlaceableItem->PlaceableActorClass == nullptr)
+	if (bIsInPlacementMode && CurrentPlaceableItem == PlaceableItem)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UPlacementComponent::EnterPlacementMode: PlaceableActorClass is null!"));
 		return;
 	}
 
@@ -78,7 +79,7 @@ void UPlacementComponent::EnterPlacementMode(UItemDataAsset* PlaceableItem)
 	CurrentRotationOffset = 0.0f;
 	
 	UpdatePreviewActor();
-	UpdatePreview(); // Update preview immediately so it's visible right away
+	UpdatePreview();
 	ShowPlacementInstructions();
 }
 
@@ -107,13 +108,9 @@ void UPlacementComponent::AdjustPlacementRotation(const FInputActionValue& Value
 		return;
 	}
 
-	// Get scroll delta (positive for scroll up, negative for scroll down)
 	float ScrollDelta = Value.Get<float>();
-	
-	// Adjust rotation based on scroll direction
 	CurrentRotationOffset += (ScrollDelta * RotationAdjustmentStep);
 	
-	// Keep rotation in 0-360 range
 	while (CurrentRotationOffset >= 360.0f)
 	{
 		CurrentRotationOffset -= 360.0f;
@@ -153,10 +150,8 @@ void UPlacementComponent::PickupItem(const FInputActionValue& Value)
 		ASoilPlot* HitSoilPlot = Cast<ASoilPlot>(HitResult.GetActor());
 		if (HitSoilPlot)
 		{
-			// Get the container data asset from the soil plot
 			USoilContainerDataAsset* ContainerData = HitSoilPlot->GetContainerDataAsset();
 			
-			// Fallback to old system: try to get soil data if no container data
 			if (!ContainerData)
 			{
 				USoilDataAsset* SoilData = HitSoilPlot->GetSoilDataAsset();
@@ -167,19 +162,13 @@ void UPlacementComponent::PickupItem(const FInputActionValue& Value)
 
 				if (SoilData)
 				{
-					// Broadcast old delegate for backward compatibility
 					OnPlaceablePickedUp.Broadcast(GetOwner(), SoilData);
-					
-					// Destroy the placeable actor
 					HitSoilPlot->Destroy();
 				}
 			}
 			else
 			{
-				// Broadcast new container delegate
 				OnContainerPickedUp.Broadcast(GetOwner(), ContainerData);
-				
-				// Destroy the placeable actor
 				HitSoilPlot->Destroy();
 			}
 		}
@@ -204,37 +193,39 @@ void UPlacementComponent::UpdatePreview()
 		return;
 	}
 
-	// Calculate placement location and rotation
 	FVector HitLocation = HitResult.Location;
 	FVector HitNormal = HitResult.Normal;
 	
-	// Apply offset from item data asset
 	float OffsetZ = CurrentPlaceableItem->PreviewOffsetZ;
-	HitLocation.Z += OffsetZ;
-
-	// Calculate rotation from normal
-	FRotator BaseRotation = CalculateRotationFromNormal(HitNormal);
+	FVector TargetBottom = HitLocation;
+	TargetBottom.Z += OffsetZ;
 	
-	// Apply rotation offset (scroll wheel adjustment)
+	if (PreviewActor && !bBottomOffsetCached)
+	{
+		CachedBottomOffset = CalculateActorBottomOffset(PreviewActor);
+		bBottomOffsetCached = true;
+	}
+	
+	FVector ActorRootLocation = TargetBottom;
+	ActorRootLocation.Z -= CachedBottomOffset;
+
+	FRotator BaseRotation = CalculateRotationFromNormal(HitNormal);
 	FRotator NewRotation = BaseRotation;
 	NewRotation.Yaw += CurrentRotationOffset;
 
-	// Check if location is valid
-	bool bIsValid = CanPlaceAtLocation(HitLocation, HitNormal);
+	bool bIsValid = CanPlaceAtLocation(ActorRootLocation, HitNormal);
 
-	// Update preview location and rotation
-	PreviewLocation = HitLocation;
+	PreviewLocation = ActorRootLocation;
+	TargetBottomLocation = TargetBottom;
 	PreviewRotation = NewRotation;
 	bPreviewLocationValid = bIsValid;
 
-	// Update preview actor
 	if (PreviewActor)
 	{
 		PreviewActor->SetActorLocation(PreviewLocation);
 		PreviewActor->SetActorRotation(PreviewRotation);
 		PreviewActor->SetActorHiddenInGame(false);
 
-		// Update material based on validity
 		if (UStaticMeshComponent* MeshComp = PreviewActor->FindComponentByClass<UStaticMeshComponent>())
 		{
 			if (bIsValid && PreviewMaterialValid)
@@ -258,10 +249,7 @@ bool UPlacementComponent::PerformGroundTrace(FHitResult& OutHit) const
 
 	FVector Start = CameraComponent->GetComponentLocation();
 	FVector ForwardVector = CameraComponent->GetForwardVector();
-	
-	// Use fixed trace distance of 1000
 	float TraceDistance = 1000.0f;
-	
 	FVector End = Start + (ForwardVector * TraceDistance);
 
 	FCollisionQueryParams TraceParams(FName(TEXT("PlacementTrace")), true, GetOwner());
@@ -281,7 +269,6 @@ bool UPlacementComponent::PerformGroundTrace(FHitResult& OutHit) const
 
 FRotator UPlacementComponent::CalculateRotationFromNormal(const FVector& Normal) const
 {
-	// Create rotation matrix with Z-axis aligned to surface normal
 	FMatrix RotationMatrix = FRotationMatrix::MakeFromZ(Normal);
 	return RotationMatrix.Rotator();
 }
@@ -293,7 +280,6 @@ bool UPlacementComponent::CanPlaceAtLocation(const FVector& Location, const FVec
 		return false;
 	}
 
-	// Check minimum distance from player
 	FVector OwnerLocation = GetOwner()->GetActorLocation();
 	float DistanceToPlayer = FVector::Dist(Location, OwnerLocation);
 	if (DistanceToPlayer < MinPlacementDistance)
@@ -301,7 +287,6 @@ bool UPlacementComponent::CanPlaceAtLocation(const FVector& Location, const FVec
 		return false;
 	}
 
-	// Check for overlapping actors (especially other placeable items of the same type)
 	TArray<FOverlapResult> OverlapResults;
 	FCollisionQueryParams QueryParams;
 	QueryParams.AddIgnoredActor(GetOwner());
@@ -321,7 +306,6 @@ bool UPlacementComponent::CanPlaceAtLocation(const FVector& Location, const FVec
 
 	if (bHasOverlap && CurrentPlaceableItem && CurrentPlaceableItem->PlaceableActorClass)
 	{
-		// Check if any overlapping actor is the same type as what we're placing
 		TSubclassOf<AActor> PlaceableClass = CurrentPlaceableItem->PlaceableActorClass;
 		for (const FOverlapResult& Overlap : OverlapResults)
 		{
@@ -342,43 +326,53 @@ void UPlacementComponent::PlaceItemAtLocation(const FVector& Location, const FRo
 		return;
 	}
 
-	// Get the actor class to spawn
 	TSubclassOf<AActor> PlaceableClass = CurrentPlaceableItem->PlaceableActorClass;
 	if (!PlaceableClass)
 	{
-		// Default to ASoilPlot for backward compatibility
 		PlaceableClass = ASoilPlot::StaticClass();
 	}
 
-	// Spawn the placeable actor with the rotation (which already includes the rotation offset)
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	
 	AActor* NewPlaceable = GetWorld()->SpawnActor<AActor>(PlaceableClass, Location, Rotation, SpawnParams);
 	if (NewPlaceable)
 	{
-		// If it's a soil plot, initialize it with the container data asset (or nullptr for empty container)
 		if (ASoilPlot* NewSoilPlot = Cast<ASoilPlot>(NewPlaceable))
 		{
-			// Initialize with container data asset and no soil (empty container)
 			USoilContainerDataAsset* ContainerData = CurrentPlaceableItem->PlaceableContainerDataAsset;
-			// Fallback to old system for backward compatibility
 			if (!ContainerData && CurrentPlaceableItem->PlaceableSoilDataAsset)
 			{
-				// Old system: if only soil data is provided, initialize with it (backward compatibility)
 				NewSoilPlot->Initialize(CurrentPlaceableItem->PlaceableSoilDataAsset);
 			}
 			else
 			{
-				// New system: initialize with container data and no soil
 				NewSoilPlot->Initialize(ContainerData, nullptr);
 			}
 		}
 
-		// Broadcast delegate
+		float BottomOffset = CachedBottomOffset;
+		if (!bBottomOffsetCached)
+		{
+			NewPlaceable->RegisterAllComponents();
+			TArray<UPrimitiveComponent*> PrimitiveComponents;
+			NewPlaceable->GetComponents<UPrimitiveComponent>(PrimitiveComponents);
+			for (UPrimitiveComponent* Comp : PrimitiveComponents)
+			{
+				if (Comp)
+				{
+					Comp->UpdateBounds();
+				}
+			}
+			BottomOffset = CalculateActorBottomOffset(NewPlaceable);
+		}
+
+		FVector AdjustedLocation = TargetBottomLocation;
+		AdjustedLocation.Z -= BottomOffset;
+		NewPlaceable->SetActorLocation(AdjustedLocation);
+
 		OnPlaceablePlaced.Broadcast(GetOwner(), NewPlaceable, CurrentPlaceableItem);
 
-		// Consume item from inventory
 		if (UInventoryComponent* InventoryComp = GetOwner()->FindComponentByClass<UInventoryComponent>())
 		{
 			int32 EquippedSlot = InventoryComp->GetEquippedSlot();
@@ -386,14 +380,12 @@ void UPlacementComponent::PlaceItemAtLocation(const FVector& Location, const FRo
 			{
 				InventoryComp->ConsumeFromSlot(EquippedSlot, 1);
 				
-				// Check if we still have the placeable item after consuming
 				const TArray<FInventorySlot>& Slots = InventoryComp->GetInventorySlots();
 				if (Slots.IsValidIndex(EquippedSlot))
 				{
 					const FInventorySlot& Slot = Slots[EquippedSlot];
 					if (Slot.IsEmpty() || !Slot.ItemDefinition || !Slot.ItemDefinition->bIsPlaceable)
 					{
-						// No more placeable items, exit placement mode
 						ExitPlacementMode();
 					}
 				}
@@ -409,14 +401,14 @@ void UPlacementComponent::UpdatePreviewActor()
 		return;
 	}
 
-	// Destroy existing preview if any
 	DestroyPreviewActor();
+	
+	CachedBottomOffset = 0.0f;
+	bBottomOffsetCached = false;
 
-	// Get the actor class to use for preview
 	TSubclassOf<AActor> PreviewClass = CurrentPlaceableItem->PlaceableActorClass;
 	if (!PreviewClass)
 	{
-		// If PlaceableContainerDataAsset or PlaceableSoilDataAsset is set, default to ASoilPlot
 		if (CurrentPlaceableItem->PlaceableContainerDataAsset || CurrentPlaceableItem->PlaceableSoilDataAsset)
 		{
 			PreviewClass = ASoilPlot::StaticClass();
@@ -427,35 +419,42 @@ void UPlacementComponent::UpdatePreviewActor()
 		}
 	}
 
-	// Spawn preview actor
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	
 	PreviewActor = GetWorld()->SpawnActor<AActor>(PreviewClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
 	if (PreviewActor)
 	{
-		// If it's a soil plot, initialize with container data for mesh (or nullptr for empty container preview)
 		if (ASoilPlot* SoilPlotPreview = Cast<ASoilPlot>(PreviewActor))
 		{
-			// Initialize with container data asset and no soil (empty container preview)
 			USoilContainerDataAsset* ContainerData = CurrentPlaceableItem->PlaceableContainerDataAsset;
-			// Fallback to old system for backward compatibility
 			if (!ContainerData && CurrentPlaceableItem->PlaceableSoilDataAsset)
 			{
-				// Old system: if only soil data is provided, initialize with it (backward compatibility)
 				SoilPlotPreview->Initialize(CurrentPlaceableItem->PlaceableSoilDataAsset);
 			}
 			else
 			{
-				// New system: initialize with container data and no soil
 				SoilPlotPreview->Initialize(ContainerData, nullptr);
 			}
 		}
 
-		// Disable collision on preview
 		PreviewActor->SetActorEnableCollision(false);
+		
+		PreviewActor->RegisterAllComponents();
+		
+		TArray<UPrimitiveComponent*> PrimitiveComponents;
+		PreviewActor->GetComponents<UPrimitiveComponent>(PrimitiveComponents);
+		for (UPrimitiveComponent* Comp : PrimitiveComponents)
+		{
+			if (Comp)
+			{
+				Comp->UpdateBounds();
+			}
+		}
+		
+		CachedBottomOffset = CalculateActorBottomOffset(PreviewActor);
+		bBottomOffsetCached = true;
 
-		// Apply default invalid material initially
 		if (PreviewMaterialInvalid)
 		{
 			if (UStaticMeshComponent* MeshComp = PreviewActor->FindComponentByClass<UStaticMeshComponent>())
@@ -489,7 +488,6 @@ void UPlacementComponent::ShowPlacementInstructions()
 
 	if (PlacementInstructionWidget)
 	{
-		// Try to cast to InteractionWidget to use its SetPromptText method
 		if (UInteractionWidget* InteractionWidget = Cast<UInteractionWidget>(PlacementInstructionWidget))
 		{
 			InteractionWidget->SetPromptText(FText::FromString(TEXT("LMB To Place, Mouse Scroll to Rotate")));
@@ -497,7 +495,6 @@ void UPlacementComponent::ShowPlacementInstructions()
 		}
 		else
 		{
-			// If not InteractionWidget, just make it visible
 			PlacementInstructionWidget->SetVisibility(ESlateVisibility::Visible);
 		}
 	}
@@ -516,4 +513,119 @@ void UPlacementComponent::HidePlacementInstructions()
 			PlacementInstructionWidget->SetVisibility(ESlateVisibility::Hidden);
 		}
 	}
+}
+
+float UPlacementComponent::CalculateActorBottomOffset(AActor* Actor) const
+{
+	if (!Actor)
+	{
+		return 0.0f;
+	}
+
+	FTransform ActorTransform = Actor->GetActorTransform();
+
+	TArray<UStaticMeshComponent*> StaticMeshComponents;
+	Actor->GetComponents<UStaticMeshComponent>(StaticMeshComponents);
+	
+	UStaticMeshComponent* MainMesh = nullptr;
+	for (UStaticMeshComponent* MeshComp : StaticMeshComponents)
+	{
+		if (MeshComp && MeshComp->GetStaticMesh() != nullptr)
+		{
+			FString ComponentName = MeshComp->GetName();
+			if (!ComponentName.Contains(TEXT("Widget"), ESearchCase::IgnoreCase))
+			{
+				MainMesh = MeshComp;
+				break;
+			}
+		}
+	}
+	
+	if (MainMesh && MainMesh->GetStaticMesh())
+	{
+		FBoxSphereBounds MeshBounds = MainMesh->GetStaticMesh()->GetBounds();
+		FBox MeshLocalBox = MeshBounds.GetBox();
+		
+		if (MeshLocalBox.IsValid)
+		{
+			FTransform MeshTransform = MainMesh->GetComponentTransform();
+			FTransform RelativeTransform = MeshTransform.GetRelativeTransform(ActorTransform);
+			
+			FBox ActorSpaceBox = MeshLocalBox.TransformBy(RelativeTransform);
+			
+			if (ActorSpaceBox.IsValid)
+			{
+				return ActorSpaceBox.Min.Z;
+			}
+		}
+	}
+
+	FVector Origin, BoxExtent;
+	Actor->GetActorBounds(false, Origin, BoxExtent);
+	
+	if (BoxExtent.SizeSquared() > SMALL_NUMBER)
+	{
+		FVector WorldBottom = Origin - FVector(0.0f, 0.0f, BoxExtent.Z);
+		FVector LocalBottom = ActorTransform.InverseTransformPosition(WorldBottom);
+		return LocalBottom.Z;
+	}
+
+	FBox CombinedBounds(ForceInit);
+	bool bHasBounds = false;
+
+	TArray<UPrimitiveComponent*> PrimitiveComponents;
+	Actor->GetComponents<UPrimitiveComponent>(PrimitiveComponents);
+
+	for (UPrimitiveComponent* Comp : PrimitiveComponents)
+	{
+		if (Comp)
+		{
+			FString ComponentName = Comp->GetName();
+			if (ComponentName.Contains(TEXT("Widget"), ESearchCase::IgnoreCase))
+			{
+				continue;
+			}
+			
+			FBoxSphereBounds ComponentBounds;
+			
+			if (Comp->IsRegistered() && Comp->Bounds.SphereRadius > 0.0f)
+			{
+				ComponentBounds = Comp->Bounds;
+			}
+			else
+			{
+				ComponentBounds = Comp->CalcLocalBounds();
+			}
+			
+			FBox LocalBox = ComponentBounds.GetBox();
+			
+			if (LocalBox.IsValid)
+			{
+				FTransform ComponentTransform = Comp->GetComponentTransform();
+				FTransform RelativeTransform = ComponentTransform.GetRelativeTransform(ActorTransform);
+				
+				FBox ActorSpaceBox = LocalBox.TransformBy(RelativeTransform);
+				
+				if (ActorSpaceBox.IsValid)
+				{
+					if (!bHasBounds)
+					{
+						CombinedBounds = ActorSpaceBox;
+						bHasBounds = true;
+					}
+					else
+					{
+						CombinedBounds += ActorSpaceBox;
+					}
+				}
+			}
+		}
+	}
+
+	if (bHasBounds && CombinedBounds.IsValid)
+	{
+		return CombinedBounds.Min.Z;
+	}
+
+	return 0.0f;
 }

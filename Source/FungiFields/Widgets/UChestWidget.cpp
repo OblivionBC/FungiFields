@@ -19,7 +19,6 @@ void UChestWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	// Bind close button if it exists
 	if (CloseButton)
 	{
 		CloseButton->OnClicked.AddDynamic(this, &UChestWidget::OnCloseButtonClicked);
@@ -38,7 +37,6 @@ void UChestWidget::SetupInventories(UInventoryComponent* PlayerInventoryComp, UI
 
 	if (PlayerInventory)
 	{
-		// Bind to dynamic delegate - ensure widget is fully constructed
 		if (IsInViewport() || GetWorld())
 		{
 			PlayerInventory->OnInventoryChanged.AddDynamic(this, &UChestWidget::OnPlayerInventoryChanged);
@@ -48,7 +46,6 @@ void UChestWidget::SetupInventories(UInventoryComponent* PlayerInventoryComp, UI
 
 	if (ChestInventory)
 	{
-		// Bind to dynamic delegate - ensure widget is fully constructed
 		if (IsInViewport() || GetWorld())
 		{
 			ChestInventory->OnInventoryChanged.AddDynamic(this, &UChestWidget::OnChestInventoryChanged);
@@ -61,7 +58,6 @@ void UChestWidget::CloseWidget()
 {
 	RemoveFromParent();
 
-	// Restore game input mode
 	if (UWorld* World = GetWorld())
 	{
 		if (APlayerController* PC = World->GetFirstPlayerController())
@@ -72,13 +68,11 @@ void UChestWidget::CloseWidget()
 		}
 	}
 
-	// Broadcast close event via delegate
 	OnChestWidgetClosed.Broadcast();
 }
 
 FReply UChestWidget::NativeOnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent)
 {
-	// Close on Escape or Tab
 	if (InKeyEvent.GetKey() == EKeys::Escape || InKeyEvent.GetKey() == EKeys::Tab)
 	{
 		CloseWidget();
@@ -117,13 +111,11 @@ void UChestWidget::UpdatePlayerSlots()
 	
 	UE_LOG(LogTemp, Log, TEXT("UChestWidget: Updating %d player slots, inventory has %d slots"), PlayerSlotCount, InventorySlots.Num());
 
-	// Ensure we have enough slot widgets
 	if (PlayerSlotWidgets.Num() < PlayerSlotCount)
 	{
 		PlayerSlotWidgets.SetNum(PlayerSlotCount);
 	}
 
-	// Update all player slots - ensure every slot has a widget, even if empty
 	for (int32 i = 0; i < PlayerSlotCount; ++i)
 	{
 		UInventorySlotWidget* SlotWidget = GetOrCreatePlayerSlotWidget(i);
@@ -133,19 +125,16 @@ void UChestWidget::UpdatePlayerSlots()
 			continue;
 		}
 
-		// Get slot data from inventory, or create empty slot if index is beyond inventory size
 		FInventorySlot SlotData;
 		if (i < InventorySlots.Num())
 		{
 			SlotData = InventorySlots[i];
 		}
-		// Else SlotData remains default (empty slot with ItemDefinition = nullptr, Count = 0)
 
-		const bool bIsEquipped = (i == EquippedSlotIndex && i < 9); // Only first 9 slots can be equipped (hotbar)
+		const bool bIsEquipped = (i == EquippedSlotIndex && i < 9);
 		SlotWidget->SetSlotData(SlotData, i, bIsEquipped);
-		SlotWidget->SetInventorySource(0); // 0 = Player inventory
+		SlotWidget->SetInventorySource(0);
 		
-		// Ensure widget is visible even when empty
 		SlotWidget->SetVisibility(ESlateVisibility::Visible);
 	}
 }
@@ -168,13 +157,11 @@ void UChestWidget::UpdateChestSlots()
 	
 	UE_LOG(LogTemp, Log, TEXT("UChestWidget: Updating %d chest slots, inventory has %d slots"), ChestSlotCount, InventorySlots.Num());
 
-	// Ensure we have enough slot widgets
 	if (ChestSlotWidgets.Num() < ChestSlotCount)
 	{
 		ChestSlotWidgets.SetNum(ChestSlotCount);
 	}
 
-	// Update all chest slots - ensure every slot has a widget, even if empty
 	for (int32 i = 0; i < ChestSlotCount; ++i)
 	{
 		UInventorySlotWidget* SlotWidget = GetOrCreateChestSlotWidget(i);
@@ -184,18 +171,20 @@ void UChestWidget::UpdateChestSlots()
 			continue;
 		}
 
-		// Get slot data from inventory, or create empty slot if index is beyond inventory size
 		FInventorySlot SlotData;
 		if (i < InventorySlots.Num())
 		{
 			SlotData = InventorySlots[i];
 		}
-		// Else SlotData remains default (empty slot with ItemDefinition = nullptr, Count = 0)
 
-		SlotWidget->SetSlotData(SlotData, i, false); // Chest slots are never equipped
-		SlotWidget->SetInventorySource(1); // 1 = Chest inventory
+		SlotWidget->SetSlotData(SlotData, i, false);
+		SlotWidget->SetInventorySource(1);
 		
-		// Ensure widget is visible even when empty
+		if (SlotWidget->GetSlotIndex() != i)
+		{
+			UE_LOG(LogTemp, Error, TEXT("UChestWidget: Slot index mismatch! Expected %d but got %d"), i, SlotWidget->GetSlotIndex());
+		}
+		
 		SlotWidget->SetVisibility(ESlateVisibility::Visible);
 	}
 }
@@ -205,6 +194,11 @@ UInventorySlotWidget* UChestWidget::GetOrCreatePlayerSlotWidget(int32 SlotIndex)
 	if (SlotIndex < 0 || SlotIndex >= PlayerSlotCount)
 	{
 		return nullptr;
+	}
+
+	if (PlayerSlotWidgets.Num() <= SlotIndex)
+	{
+		PlayerSlotWidgets.SetNum(SlotIndex + 1);
 	}
 
 	if (PlayerSlotWidgets[SlotIndex] && PlayerSlotWidgets[SlotIndex]->IsValidLowLevel())
@@ -217,7 +211,6 @@ UInventorySlotWidget* UChestWidget::GetOrCreatePlayerSlotWidget(int32 SlotIndex)
 		return nullptr;
 	}
 
-	// Create slot widget
 	UInventorySlotWidget* SlotWidget = nullptr;
 	if (SlotWidgetClass)
 	{
@@ -228,14 +221,12 @@ UInventorySlotWidget* UChestWidget::GetOrCreatePlayerSlotWidget(int32 SlotIndex)
 		}
 	}
 	
-	// Fallback: create default if no class specified or creation failed
 	if (!SlotWidget)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("UChestWidget: SlotWidgetClass not set! Creating default slot widget. Please set SlotWidgetClass in Blueprint."));
 		UWorld* World = GetWorld();
 		if (World)
 		{
-			// Use CreateWidget instead of NewObject for proper widget initialization
 			SlotWidget = CreateWidget<UInventorySlotWidget>(World, UInventorySlotWidget::StaticClass());
 		}
 	}
@@ -246,10 +237,8 @@ UInventorySlotWidget* UChestWidget::GetOrCreatePlayerSlotWidget(int32 SlotIndex)
 		return nullptr;
 	}
 
-	// Ensure widget is visible before adding to grid
 	SlotWidget->SetVisibility(ESlateVisibility::Visible);
 
-	// Add to grid first
 	UUniformGridSlot* GridSlot = PlayerInventoryGrid->AddChildToUniformGrid(SlotWidget);
 	if (GridSlot)
 	{
@@ -263,11 +252,8 @@ UInventorySlotWidget* UChestWidget::GetOrCreatePlayerSlotWidget(int32 SlotIndex)
 		UE_LOG(LogTemp, Warning, TEXT("UChestWidget: Failed to add player slot widget %d to grid"), SlotIndex);
 	}
 
-	// Store widget reference
 	PlayerSlotWidgets[SlotIndex] = SlotWidget;
 
-	// Bind delegates only for newly created widgets (existing widgets return early above)
-	// No need to Clear() since this is a brand new widget with no bindings
 	if (IsValid(SlotWidget) && IsValid(this) && GetWorld())
 	{
 		if (SlotWidget->IsValidLowLevel() && this->IsValidLowLevel())
@@ -288,6 +274,11 @@ UInventorySlotWidget* UChestWidget::GetOrCreateChestSlotWidget(int32 SlotIndex)
 		return nullptr;
 	}
 
+	if (ChestSlotWidgets.Num() <= SlotIndex)
+	{
+		ChestSlotWidgets.SetNum(SlotIndex + 1);
+	}
+
 	if (ChestSlotWidgets[SlotIndex] && ChestSlotWidgets[SlotIndex]->IsValidLowLevel())
 	{
 		return ChestSlotWidgets[SlotIndex];
@@ -298,7 +289,6 @@ UInventorySlotWidget* UChestWidget::GetOrCreateChestSlotWidget(int32 SlotIndex)
 		return nullptr;
 	}
 
-	// Create slot widget
 	UInventorySlotWidget* SlotWidget = nullptr;
 	if (SlotWidgetClass)
 	{
@@ -309,14 +299,12 @@ UInventorySlotWidget* UChestWidget::GetOrCreateChestSlotWidget(int32 SlotIndex)
 		}
 	}
 	
-	// Fallback: create default if no class specified or creation failed
 	if (!SlotWidget)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("UChestWidget: SlotWidgetClass not set! Creating default slot widget. Please set SlotWidgetClass in Blueprint."));
 		UWorld* World = GetWorld();
 		if (World)
 		{
-			// Use CreateWidget instead of NewObject for proper widget initialization
 			SlotWidget = CreateWidget<UInventorySlotWidget>(World, UInventorySlotWidget::StaticClass());
 		}
 	}
@@ -327,10 +315,8 @@ UInventorySlotWidget* UChestWidget::GetOrCreateChestSlotWidget(int32 SlotIndex)
 		return nullptr;
 	}
 
-	// Ensure widget is visible before adding to grid
 	SlotWidget->SetVisibility(ESlateVisibility::Visible);
 
-	// Add to grid first
 	UUniformGridSlot* GridSlot = ChestInventoryGrid->AddChildToUniformGrid(SlotWidget);
 	if (GridSlot)
 	{
@@ -344,11 +330,8 @@ UInventorySlotWidget* UChestWidget::GetOrCreateChestSlotWidget(int32 SlotIndex)
 		UE_LOG(LogTemp, Warning, TEXT("UChestWidget: Failed to add chest slot widget %d to grid"), SlotIndex);
 	}
 
-	// Store widget reference
 	ChestSlotWidgets[SlotIndex] = SlotWidget;
 
-	// Bind delegates only for newly created widgets (existing widgets return early above)
-	// No need to Clear() since this is a brand new widget with no bindings
 	if (IsValid(SlotWidget) && IsValid(this) && GetWorld())
 	{
 		if (SlotWidget->IsValidLowLevel() && this->IsValidLowLevel())
@@ -364,22 +347,18 @@ UInventorySlotWidget* UChestWidget::GetOrCreateChestSlotWidget(int32 SlotIndex)
 
 void UChestWidget::HandlePlayerSlotClicked(int32 SlotIndex, int32 InventorySourceID)
 {
-	// Handle slot click
 }
 
 void UChestWidget::HandleChestSlotClicked(int32 SlotIndex, int32 InventorySourceID)
 {
-	// Handle slot click
 }
 
 void UChestWidget::HandlePlayerDragStarted(int32 SlotIndex, int32 InventorySourceID, const FInventorySlot& SlotData)
 {
-	// Drag started from player inventory
 }
 
 void UChestWidget::HandleChestDragStarted(int32 SlotIndex, int32 InventorySourceID, const FInventorySlot& SlotData)
 {
-	// Drag started from chest inventory
 }
 
 void UChestWidget::HandleSlotDropped(int32 SourceSlotIndex, int32 SourceInventoryID, int32 TargetSlotIndex, int32 TargetInventoryID)
@@ -389,7 +368,6 @@ void UChestWidget::HandleSlotDropped(int32 SourceSlotIndex, int32 SourceInventor
 
 bool UChestWidget::HandleItemTransfer(int32 SourceSlotIndex, int32 SourceInventoryID, int32 TargetSlotIndex, int32 TargetInventoryID)
 {
-	// Player to Player (rearrange within player inventory)
 	if (SourceInventoryID == 0 && TargetInventoryID == 0)
 	{
 		if (PlayerInventory)
@@ -397,16 +375,13 @@ bool UChestWidget::HandleItemTransfer(int32 SourceSlotIndex, int32 SourceInvento
 			return PlayerInventory->MoveItemToSlot(SourceSlotIndex, TargetSlotIndex);
 		}
 	}
-	// Chest to Chest (rearrange within chest inventory)
 	else if (SourceInventoryID == 1 && TargetInventoryID == 1)
 	{
 		if (ChestInventory)
 		{
-			// Direct swap for chest (replication handled by component)
 			return ChestInventory->SwapSlots(SourceSlotIndex, TargetSlotIndex);
 		}
 	}
-	// Player to Chest
 	else if (SourceInventoryID == 0 && TargetInventoryID == 1)
 	{
 		if (PlayerInventory && ChestInventory)
@@ -417,10 +392,8 @@ bool UChestWidget::HandleItemTransfer(int32 SourceSlotIndex, int32 SourceInvento
 				const FInventorySlot& SourceSlot = PlayerSlots[SourceSlotIndex];
 				if (SourceSlot.ItemDefinition)
 				{
-					// Try to add to chest
 					if (ChestInventory->TryAddItem(const_cast<UItemDataAsset*>(SourceSlot.ItemDefinition.Get()), SourceSlot.Count))
 					{
-						// Remove from player inventory
 						PlayerInventory->ConsumeFromSlot(SourceSlotIndex, SourceSlot.Count);
 						return true;
 					}
@@ -428,7 +401,6 @@ bool UChestWidget::HandleItemTransfer(int32 SourceSlotIndex, int32 SourceInvento
 			}
 		}
 	}
-	// Chest to Player
 	else if (SourceInventoryID == 1 && TargetInventoryID == 0)
 	{
 		if (PlayerInventory && ChestInventory)
@@ -439,10 +411,8 @@ bool UChestWidget::HandleItemTransfer(int32 SourceSlotIndex, int32 SourceInvento
 				const FInventorySlot& SourceSlot = ChestSlots[SourceSlotIndex];
 				if (SourceSlot.ItemDefinition)
 				{
-					// Try to add to player inventory
 					if (PlayerInventory->TryAddItem(const_cast<UItemDataAsset*>(SourceSlot.ItemDefinition.Get()), SourceSlot.Count))
 					{
-						// Remove from chest
 						ChestInventory->RemoveFromSlot(SourceSlotIndex, SourceSlot.Count);
 						return true;
 					}

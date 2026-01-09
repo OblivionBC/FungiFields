@@ -7,7 +7,6 @@
 
 AChestActor::AChestActor()
 {
-	// Use the specialized chest inventory component that has replication enabled by default
 	ChestInventoryComponent = CreateDefaultSubobject<UChestInventoryComponent>(TEXT("ChestInventoryComponent"));
 }
 
@@ -23,14 +22,12 @@ void AChestActor::Interact_Implementation(AActor* Interactor)
 		return;
 	}
 
-	// Only allow player characters to interact
 	AFungiFieldsCharacter* PlayerCharacter = Cast<AFungiFieldsCharacter>(Interactor);
 	if (!PlayerCharacter)
 	{
 		return;
 	}
 
-	// Open or close the chest widget
 	if (ChestWidgetInstance && ChestWidgetInstance->IsInViewport())
 	{
 		CloseChestWidget();
@@ -68,7 +65,6 @@ void AChestActor::OpenChestWidgetForPlayer(AActor* Interactor)
 		return;
 	}
 
-	// Create or get the chest widget
 	if (!ChestWidgetInstance)
 	{
 		ChestWidgetInstance = CreateWidget<UChestWidget>(World, ChestWidgetClass);
@@ -76,15 +72,10 @@ void AChestActor::OpenChestWidgetForPlayer(AActor* Interactor)
 
 	if (ChestWidgetInstance)
 	{
-		// Initialize widget with player and chest inventories
 		ChestWidgetInstance->SetupInventories(PlayerCharacter->InventoryComponent, ChestInventoryComponent);
-		
-		// Bind to close delegate
 		ChestWidgetInstance->OnChestWidgetClosed.AddDynamic(this, &AChestActor::OnChestWidgetClosed);
-		
 		ChestWidgetInstance->AddToViewport();
 
-		// Set input mode to UI
 		if (APlayerController* PC = Cast<APlayerController>(PlayerCharacter->GetController()))
 		{
 			FInputModeUIOnly InputMode;
@@ -97,10 +88,8 @@ void AChestActor::OpenChestWidgetForPlayer(AActor* Interactor)
 
 void AChestActor::OnChestWidgetClosed()
 {
-	// Widget has been closed, clean up
 	ChestWidgetInstance = nullptr;
 	
-	// Restore game input mode
 	if (UWorld* World = GetWorld())
 	{
 		if (APlayerController* PC = World->GetFirstPlayerController())
@@ -111,7 +100,6 @@ void AChestActor::OnChestWidgetClosed()
 		}
 	}
 
-	// Broadcast chest closed event
 	OnChestClosed.Broadcast();
 }
 
@@ -119,9 +107,9 @@ void AChestActor::CloseChestWidget()
 {
 	if (ChestWidgetInstance)
 	{
-		// Close via widget method (will broadcast delegate)
 		ChestWidgetInstance->CloseWidget();
 	}
 }
+
 
 

@@ -20,18 +20,6 @@ void UInventoryComponent::PostInitProperties()
 {
 	Super::PostInitProperties();
 	
-	// SetIsReplicatedByDefault must be called during construction.
-	// PostInitProperties is called during construction, so we can set it here.
-	// This handles the case where bEnableReplication is set via EditDefaultsOnly in Blueprint.
-	// 
-	// IMPORTANT: If bEnableReplication is set AFTER PostInitProperties runs (e.g., from actor constructor),
-	// replication will NOT be enabled. The flag must be set BEFORE PostInitProperties runs.
-	// This means either:
-	// 1. Set it via EditDefaultsOnly in Blueprint (before component creation)
-	// 2. Set it immediately after CreateDefaultSubobject but before PostInitProperties runs (not possible)
-	// 3. Create a custom component class with bEnableReplication = true by default
-	//
-	// For now, we check the flag here. If it's true, enable replication.
 	if (bEnableReplication)
 	{
 		SetIsReplicatedByDefault(true);
@@ -40,16 +28,7 @@ void UInventoryComponent::PostInitProperties()
 
 void UInventoryComponent::SetEnableReplication(bool bEnable)
 {
-	// Set the flag - but DO NOT call SetIsReplicatedByDefault here!
-	// SetIsReplicatedByDefault can ONLY be called during component construction.
-	// If this is called from actor constructor after CreateDefaultSubobject, PostInitProperties
-	// has already run, so we cannot enable replication this way.
-	// 
-	// Solution: Set bEnableReplication BEFORE CreateDefaultSubobject, or use EditDefaultsOnly in Blueprint.
 	bEnableReplication = bEnable;
-	
-	// We cannot call SetIsReplicatedByDefault here because construction may have already completed.
-	// This function should only be used to set the flag before component creation, or it won't work.
 }
 
 void UInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -68,10 +47,8 @@ void UInventoryComponent::BeginPlay()
 
 	InventorySlots.SetNum(InitialSlotCount);
 
-	// Auto-detect if equipping should be enabled based on owner type
 	if (bSupportsEquipping && GetOwner())
 	{
-		// Only enable equipping if owner is a character
 		bSupportsEquipping = Cast<ACharacter>(GetOwner()) != nullptr;
 	}
 }
@@ -83,7 +60,6 @@ bool UInventoryComponent::TryAddItem(UItemDataAsset* ItemToAdd, int32 Amount)
 		return false;
 	}
 
-	// If replication is enabled, only allow modifications on server
 	if (bEnableReplication && GetOwnerRole() != ROLE_Authority)
 	{
 		return false;
@@ -112,10 +88,7 @@ bool UInventoryComponent::TryAddItem(UItemDataAsset* ItemToAdd, int32 Amount)
 
 	if (bAnyItemAdded)
 	{
-		// Calculate new total quantity of this item
 		int32 NewTotal = GetItemTotalCount(ItemToAdd);
-		
-		// Broadcast specific item added event
 		OnItemAdded.Broadcast(ItemToAdd, TotalAdded, NewTotal);
 	}
 
@@ -163,7 +136,6 @@ bool UInventoryComponent::AddToNewSlot(UItemDataAsset* ItemToAdd, int32 Amount)
 	{
 		if (Slot.IsEmpty())
 		{
-			// Clamp amount to max stack size
 			int32 AmountToAdd = FMath::Min(Amount, ItemToAdd->MaxStackSize);
 			Slot.ItemDefinition = ItemToAdd;
 			Slot.Count = AmountToAdd;
@@ -176,7 +148,6 @@ bool UInventoryComponent::AddToNewSlot(UItemDataAsset* ItemToAdd, int32 Amount)
 
 void UInventoryComponent::BroadcastUpdate()
 {
-	// Update equipped item mesh if equipped slot might have changed (only if equipping is supported)
 	if (bSupportsEquipping)
 	{
 		UpdateEquippedItemMesh();
@@ -202,7 +173,6 @@ void UInventoryComponent::UpdateEquippedItemMesh()
 		return;
 	}
 
-	// Get character mesh for socket attachment
 	ACharacter* CharacterOwner = Cast<ACharacter>(Owner);
 	if (!CharacterOwner)
 	{
@@ -215,20 +185,17 @@ void UInventoryComponent::UpdateEquippedItemMesh()
 		return;
 	}
 
-	// Remove existing equipped item mesh
 	if (EquippedItemMeshComponent)
 	{
 		EquippedItemMeshComponent->DestroyComponent();
 		EquippedItemMeshComponent = nullptr;
 	}
 
-	// Check if we have an equipped slot
 	if (CurrentEquippedSlotIndex == INDEX_NONE)
 	{
 		return;
 	}
 
-	// Check if slot is valid
 	if (!InventorySlots.IsValidIndex(CurrentEquippedSlotIndex))
 	{
 		return;
@@ -240,36 +207,30 @@ void UInventoryComponent::UpdateEquippedItemMesh()
 		return;
 	}
 
-	// Check if item has a mesh
 	UStaticMesh* ItemMesh = EquippedSlot.ItemDefinition->ItemMesh;
 	if (!ItemMesh)
 	{
 		return;
 	}
 
-	// Create static mesh component for the equipped item
 	EquippedItemMeshComponent = NewObject<UStaticMeshComponent>(Owner, UStaticMeshComponent::StaticClass(), TEXT("EquippedItemMesh"));
 	if (!EquippedItemMeshComponent)
 	{
 		return;
 	}
 
-	// Set up the component properties before registration
 	EquippedItemMeshComponent->SetStaticMesh(ItemMesh);
 	EquippedItemMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	EquippedItemMeshComponent->SetGenerateOverlapEvents(false);
 	EquippedItemMeshComponent->SetVisibility(true);
 	EquippedItemMeshComponent->SetHiddenInGame(false);
 
-	// Attach to character mesh at RightHandItemSlot socket BEFORE registration
-	// This ensures the component is properly parented in the component hierarchy
 	EquippedItemMeshComponent->AttachToComponent(
 		CharacterMesh,
 		FAttachmentTransformRules::SnapToTargetNotIncludingScale,
 		FName("RightHandItemSlot")
 	);
 
-	// Register the component after attachment to ensure it's in the correct hierarchy
 	EquippedItemMeshComponent->RegisterComponent();
 }
 
@@ -289,7 +250,6 @@ void UInventoryComponent::EquipSlot(const FInputActionValue& Value, int32 SlotIn
 
 	CurrentEquippedSlotIndex = SlotIndex;
 	
-	// Get the item being equipped
 	UItemDataAsset* EquippedItem = nullptr;
 	if (InventorySlots.IsValidIndex(SlotIndex) && !InventorySlots[SlotIndex].IsEmpty())
 	{
@@ -298,7 +258,6 @@ void UInventoryComponent::EquipSlot(const FInputActionValue& Value, int32 SlotIn
 	
 	UpdateEquippedItemMesh();
 	
-	// Broadcast item equipped event
 	if (EquippedItem)
 	{
 		OnItemEquipped.Broadcast(EquippedItem, SlotIndex);
@@ -309,7 +268,6 @@ void UInventoryComponent::EquipSlot(const FInputActionValue& Value, int32 SlotIn
 
 bool UInventoryComponent::ConsumeFromSlot(int32 SlotIndex, int32 Amount)
 {
-	// This function is intended to run on the server in a multiplayer scenario.
 	if (Amount <= 0)
 	{
 		return false;
@@ -342,16 +300,12 @@ bool UInventoryComponent::ConsumeFromSlot(int32 SlotIndex, int32 Amount)
 		return false;
 	}
 
-	// If the consumed slot is equipped, ensure visuals/state are refreshed.
 	if (bSupportsEquipping && CurrentEquippedSlotIndex == SlotIndex)
 	{
 		UpdateEquippedItemMesh();
 	}
 
-	// Calculate new total quantity
 	int32 NewTotal = GetItemTotalCount(const_cast<UItemDataAsset*>(ItemToRemove));
-	
-	// Broadcast specific item removed event
 	OnItemRemoved.Broadcast(const_cast<UItemDataAsset*>(ItemToRemove), AmountToRemove, NewTotal);
 
 	BroadcastUpdate();
@@ -360,7 +314,6 @@ bool UInventoryComponent::ConsumeFromSlot(int32 SlotIndex, int32 Amount)
 
 bool UInventoryComponent::RemoveFromSlot(int32 SlotIndex, int32 Amount)
 {
-	// If replication is enabled, only allow modifications on server
 	if (bEnableReplication && GetOwnerRole() != ROLE_Authority)
 	{
 		return false;
@@ -391,7 +344,6 @@ bool UInventoryComponent::RemoveFromSlot(int32 SlotIndex, int32 Amount)
 		Slot.Count = 0;
 	}
 
-	// If the removed slot is equipped, ensure visuals/state are refreshed.
 	if (bSupportsEquipping && CurrentEquippedSlotIndex == SlotIndex)
 	{
 		UpdateEquippedItemMesh();
@@ -422,7 +374,6 @@ int32 UInventoryComponent::GetItemTotalCount(UItemDataAsset* Item) const
 
 bool UInventoryComponent::MoveItemToSlot(int32 FromSlotIndex, int32 ToSlotIndex)
 {
-	// If replication is enabled, only allow modifications on server
 	if (bEnableReplication && GetOwnerRole() != ROLE_Authority)
 	{
 		return false;
@@ -446,14 +397,12 @@ bool UInventoryComponent::MoveItemToSlot(int32 FromSlotIndex, int32 ToSlotIndex)
 		return false;
 	}
 
-	// If target slot is empty, move the item
 	if (ToSlot.IsEmpty())
 	{
 		ToSlot = FromSlot;
 		FromSlot.ItemDefinition = nullptr;
 		FromSlot.Count = 0;
 		
-		// Update equipped slot if needed (only if equipping is supported)
 		if (bSupportsEquipping)
 		{
 			if (CurrentEquippedSlotIndex == FromSlotIndex)
@@ -462,7 +411,6 @@ bool UInventoryComponent::MoveItemToSlot(int32 FromSlotIndex, int32 ToSlotIndex)
 			}
 			else if (CurrentEquippedSlotIndex == ToSlotIndex)
 			{
-				// Item moved to equipped slot, update mesh
 				UpdateEquippedItemMesh();
 			}
 		}
@@ -471,7 +419,6 @@ bool UInventoryComponent::MoveItemToSlot(int32 FromSlotIndex, int32 ToSlotIndex)
 		return true;
 	}
 
-	// If same item, try to stack
 	if (FromSlot.ItemDefinition == ToSlot.ItemDefinition)
 	{
 		int32 SpaceAvailable = ToSlot.ItemDefinition->MaxStackSize - ToSlot.Count;
@@ -487,7 +434,6 @@ bool UInventoryComponent::MoveItemToSlot(int32 FromSlotIndex, int32 ToSlotIndex)
 				FromSlot.Count = 0;
 			}
 
-			// Update equipped slot if needed (only if equipping is supported)
 			if (bSupportsEquipping)
 			{
 				if (CurrentEquippedSlotIndex == FromSlotIndex && FromSlot.IsEmpty())
@@ -505,13 +451,11 @@ bool UInventoryComponent::MoveItemToSlot(int32 FromSlotIndex, int32 ToSlotIndex)
 		}
 	}
 
-	// Otherwise, swap
 	return SwapSlots(FromSlotIndex, ToSlotIndex);
 }
 
 bool UInventoryComponent::SwapSlots(int32 SlotAIndex, int32 SlotBIndex)
 {
-	// If replication is enabled, only allow modifications on server
 	if (bEnableReplication && GetOwnerRole() != ROLE_Authority)
 	{
 		return false;
@@ -531,7 +475,6 @@ bool UInventoryComponent::SwapSlots(int32 SlotAIndex, int32 SlotBIndex)
 	InventorySlots[SlotAIndex] = InventorySlots[SlotBIndex];
 	InventorySlots[SlotBIndex] = Temp;
 
-	// Update equipped slot if needed (only if equipping is supported)
 	if (bSupportsEquipping)
 	{
 		if (CurrentEquippedSlotIndex == SlotAIndex)

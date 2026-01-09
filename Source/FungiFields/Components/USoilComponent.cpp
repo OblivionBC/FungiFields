@@ -23,7 +23,6 @@ void USoilComponent::BeginPlay()
 
 void USoilComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// Clear timer if active
 	if (GetWorld() && WaterEvaporationTimerHandle.IsValid())
 	{
 		GetWorld()->GetTimerManager().ClearTimer(WaterEvaporationTimerHandle);
@@ -34,7 +33,6 @@ void USoilComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void USoilComponent::Initialize(USoilDataAsset* InSoilData)
 {
-	// Allow nullptr for empty plots
 	SoilData = InSoilData;
 	CurrentWaterLevel = 0.0f;
 	bIsTilled = false;
@@ -43,7 +41,6 @@ void USoilComponent::Initialize(USoilDataAsset* InSoilData)
 	
 	if (InSoilData)
 	{
-		// Broadcast state change if soil was added
 		OnSoilStateChanged.Broadcast(GetOwner(), GetSoilState());
 	}
 }
@@ -69,7 +66,6 @@ void USoilComponent::AddWater(float Amount)
 	float OldWaterLevel = CurrentWaterLevel;
 	CurrentWaterLevel = FMath::Clamp(CurrentWaterLevel + Amount, 0.0f, SoilData->MaxWaterLevel);
 	UE_LOG(LogTemp, Display, TEXT("Water level at %f"), CurrentWaterLevel);
-	// Start evaporation timer if water was added and timer isn't running
 	if (CurrentWaterLevel > 0.0f && !WaterEvaporationTimerHandle.IsValid())
 	{
 		if (UWorld* World = GetWorld())
@@ -84,12 +80,10 @@ void USoilComponent::AddWater(float Amount)
 		}
 	}
 
-	// Broadcast water level change
 	if (FMath::Abs(CurrentWaterLevel - OldWaterLevel) > 0.01f)
 	{
 		OnWaterLevelChanged.Broadcast(GetOwner(), CurrentWaterLevel);
 		
-		// Broadcast state change if it changed
 		ESoilState NewState = GetSoilState();
 		if (OldState != NewState)
 		{
@@ -111,7 +105,6 @@ bool USoilComponent::ConsumeWater(float Amount)
 	float OldWaterLevel = CurrentWaterLevel;
 	CurrentWaterLevel = FMath::Max(0.0f, CurrentWaterLevel - Amount);
 
-	// Stop evaporation timer if water is depleted
 	if (CurrentWaterLevel <= 0.0f && WaterEvaporationTimerHandle.IsValid())
 	{
 		if (UWorld* World = GetWorld())
@@ -120,12 +113,10 @@ bool USoilComponent::ConsumeWater(float Amount)
 		}
 	}
 
-	// Broadcast water level change
 	if (FMath::Abs(CurrentWaterLevel - OldWaterLevel) > 0.01f)
 	{
 		OnWaterLevelChanged.Broadcast(GetOwner(), CurrentWaterLevel);
 		
-		// Broadcast state change if it changed
 		ESoilState NewState = GetSoilState();
 		if (OldState != NewState)
 		{
@@ -154,7 +145,6 @@ void USoilComponent::SetCrop(ACropBase* Crop)
 
 bool USoilComponent::Till(const float TillPower)
 {
-	// Can only till if soil is present
 	if (!HasSoil())
 	{
 		return false;
@@ -195,7 +185,6 @@ void USoilComponent::OnWaterEvaporationTimer()
 {
 	if (!SoilData || CurrentWaterLevel <= 0.0f)
 	{
-		// Stop timer if no water
 		if (UWorld* World = GetWorld())
 		{
 			World->GetTimerManager().ClearTimer(WaterEvaporationTimerHandle);
@@ -203,7 +192,6 @@ void USoilComponent::OnWaterEvaporationTimer()
 		return;
 	}
 
-	// Calculate evaporation based on retention multiplier
 	float EvaporationAmount = WaterEvaporationRate / SoilData->WaterRetentionMultiplier;
 	ConsumeWater(EvaporationAmount * EvaporationCheckInterval);
 }
@@ -245,7 +233,5 @@ ESoilState USoilComponent::GetSoilState() const
 
 void USoilComponent::UpdateVisuals()
 {
-	// This will be implemented by the actor to update material parameters
-	// Event-driven, not Tick-based
 }
 

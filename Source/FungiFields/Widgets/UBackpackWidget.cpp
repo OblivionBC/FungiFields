@@ -19,7 +19,6 @@ void UBackpackWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	// Bind close button if it exists
 	if (CloseButton)
 	{
 		CloseButton->OnClicked.AddDynamic(this, &UBackpackWidget::OnCloseButtonClicked);
@@ -30,7 +29,6 @@ void UBackpackWidget::NativeConstruct()
 
 FReply UBackpackWidget::NativeOnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent)
 {
-	// Close on Escape or Tab
 	if (InKeyEvent.GetKey() == EKeys::Escape || InKeyEvent.GetKey() == EKeys::Tab)
 	{
 		CloseBackpack();
@@ -47,19 +45,17 @@ void UBackpackWidget::OnCloseButtonClicked()
 
 void UBackpackWidget::CloseBackpack()
 {
-	RemoveFromParent();
+	SetVisibility(ESlateVisibility::Hidden);
 	OnBackpackClosed.Broadcast();
 }
 
 void UBackpackWidget::RefreshInventory()
 {
-	// Ensure we're bound to inventory component
 	if (!CachedInventoryComponent)
 	{
 		BindToInventoryComponent();
 	}
 	
-	// Force update all slots
 	UpdateAllSlots();
 }
 
@@ -79,7 +75,6 @@ void UBackpackWidget::BindToInventoryComponent()
 
 	CachedInventoryComponent = InventoryComp;
 
-	// Bind to dynamic delegate - ensure widget is fully constructed
 	if (IsInViewport() || GetWorld())
 	{
 		InventoryComp->OnInventoryChanged.AddDynamic(this, &UBackpackWidget::OnInventoryChanged);
@@ -112,13 +107,11 @@ void UBackpackWidget::UpdateAllSlots()
 	
 	UE_LOG(LogTemp, Log, TEXT("UBackpackWidget: Updating %d slots, inventory has %d slots"), TotalSlotCount, InventorySlots.Num());
 
-	// Ensure we have enough slot widgets
 	if (SlotWidgets.Num() < TotalSlotCount)
 	{
 		SlotWidgets.SetNum(TotalSlotCount);
 	}
 
-	// Update all slots - ensure every slot has a widget, even if empty
 	for (int32 i = 0; i < TotalSlotCount; ++i)
 	{
 		UInventorySlotWidget* SlotWidget = GetOrCreateSlotWidget(i);
@@ -128,19 +121,16 @@ void UBackpackWidget::UpdateAllSlots()
 			continue;
 		}
 
-		// Get slot data from inventory, or create empty slot if index is beyond inventory size
 		FInventorySlot SlotData;
 		if (i < InventorySlots.Num())
 		{
 			SlotData = InventorySlots[i];
 		}
-		// Else SlotData remains default (empty slot with ItemDefinition = nullptr, Count = 0)
 
-		const bool bIsEquipped = (i == EquippedSlotIndex && i < 9); // Only first 9 slots can be equipped (hotbar)
+		const bool bIsEquipped = (i == EquippedSlotIndex && i < 9);
 		SlotWidget->SetSlotData(SlotData, i, bIsEquipped);
-		SlotWidget->SetInventorySource(0); // 0 = Player inventory
+		SlotWidget->SetInventorySource(0);
 		
-		// Ensure widget is visible even when empty
 		SlotWidget->SetVisibility(ESlateVisibility::Visible);
 	}
 }
@@ -152,7 +142,6 @@ UInventorySlotWidget* UBackpackWidget::GetOrCreateSlotWidget(int32 SlotIndex)
 		return nullptr;
 	}
 
-	// If widget already exists and is valid, return it early (already bound)
 	if (SlotWidgets[SlotIndex] && SlotWidgets[SlotIndex]->IsValidLowLevel())
 	{
 		return SlotWidgets[SlotIndex];
@@ -163,7 +152,6 @@ UInventorySlotWidget* UBackpackWidget::GetOrCreateSlotWidget(int32 SlotIndex)
 		return nullptr;
 	}
 
-	// Create slot widget
 	UInventorySlotWidget* SlotWidget = nullptr;
 	if (SlotWidgetClass)
 	{
@@ -174,14 +162,12 @@ UInventorySlotWidget* UBackpackWidget::GetOrCreateSlotWidget(int32 SlotIndex)
 		}
 	}
 	
-	// Fallback: create default if no class specified or creation failed
 	if (!SlotWidget)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("UBackpackWidget: SlotWidgetClass not set! Creating default slot widget. Please set SlotWidgetClass in Blueprint."));
 		UWorld* World = GetWorld();
 		if (World)
 		{
-			// Use CreateWidget instead of NewObject for proper widget initialization
 			SlotWidget = CreateWidget<UInventorySlotWidget>(World, UInventorySlotWidget::StaticClass());
 		}
 	}
@@ -192,10 +178,8 @@ UInventorySlotWidget* UBackpackWidget::GetOrCreateSlotWidget(int32 SlotIndex)
 		return nullptr;
 	}
 
-	// Ensure widget is visible before adding to grid
 	SlotWidget->SetVisibility(ESlateVisibility::Visible);
 
-	// Add to grid first - this ensures the widget is properly parented
 	UUniformGridSlot* GridSlot = InventoryGrid->AddChildToUniformGrid(SlotWidget);
 	if (GridSlot)
 	{
@@ -209,11 +193,8 @@ UInventorySlotWidget* UBackpackWidget::GetOrCreateSlotWidget(int32 SlotIndex)
 		UE_LOG(LogTemp, Warning, TEXT("UBackpackWidget: Failed to add slot widget %d to grid"), SlotIndex);
 	}
 
-	// Store widget reference
 	SlotWidgets[SlotIndex] = SlotWidget;
 
-	// Bind delegates only for newly created widgets (existing widgets return early above)
-	// No need to Clear() since this is a brand new widget with no bindings
 	if (IsValid(SlotWidget) && IsValid(this) && GetWorld())
 	{
 		if (SlotWidget->IsValidLowLevel() && this->IsValidLowLevel())
@@ -229,19 +210,14 @@ UInventorySlotWidget* UBackpackWidget::GetOrCreateSlotWidget(int32 SlotIndex)
 
 void UBackpackWidget::HandleSlotClicked(int32 SlotIndex, int32 InventorySourceID)
 {
-	// Handle slot click (e.g., quick move, context menu, etc.)
-	// For now, we'll handle drag & drop via the drag system
 }
 
 void UBackpackWidget::HandleDragStarted(int32 SlotIndex, int32 InventorySourceID, const FInventorySlot& SlotData)
 {
-	// Drag started - the actual drop handling will be in NativeOnDrop
-	// This is just for tracking
 }
 
 void UBackpackWidget::HandleSlotDropped(int32 SourceSlotIndex, int32 SourceInventoryID, int32 TargetSlotIndex, int32 TargetInventoryID)
 {
-	// Handle item transfer within player inventory
 	if (SourceInventoryID == 0 && TargetInventoryID == 0 && CachedInventoryComponent)
 	{
 		CachedInventoryComponent->MoveItemToSlot(SourceSlotIndex, TargetSlotIndex);

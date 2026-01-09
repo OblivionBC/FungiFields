@@ -5,7 +5,6 @@ Content/MixedVFX/
 Content/GreenwoodFantasyVillage/
 Content/ThirdPerson/Meshes/
 *.DotSettings.user
-**.md
 # Visual Studio 2022 user specific files
 .vs/
 .idea/

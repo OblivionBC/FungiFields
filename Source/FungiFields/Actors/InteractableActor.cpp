@@ -1,6 +1,5 @@
 #include "InteractableActor.h"
 #include "Components/StaticMeshComponent.h"
-#include "Components/SphereComponent.h"
 #include "Components/WidgetComponent.h"
 #include "../Widgets/InteractionWidget.h"
 #include "Kismet/GameplayStatics.h"
@@ -11,17 +10,8 @@ AInteractableActor::AInteractableActor()
     PrimaryActorTick.bCanEverTick = true;
     SetRootComponent(RootComponent);
 
-    Proximity = CreateDefaultSubobject<USphereComponent>("Proximity");
-    Proximity->SetupAttachment(RootComponent);
-    Proximity->InitSphereRadius(150.f);
-    Proximity->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-    Proximity->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
-    Proximity->OnComponentBeginOverlap.AddDynamic(this, &AInteractableActor::OnProximityEnter);
-    Proximity->OnComponentEndOverlap.AddDynamic(this, &AInteractableActor::OnProximityExit);
-    Proximity->SetupAttachment(RootComponent);
-
     Mesh = CreateDefaultSubobject<UStaticMeshComponent>("Mesh");
-    Mesh->SetupAttachment(Proximity);
+    Mesh->SetupAttachment(RootComponent);
     
     Widget = CreateDefaultSubobject<UWidgetComponent>("Widget");
     Widget->SetupAttachment(Mesh);
@@ -53,36 +43,6 @@ void AInteractableActor::Tick(float DeltaSeconds)
     if (bFacePlayerCamera)
     {
         BillboardToCamera();
-    }
-}
-
-void AInteractableActor::OnProximityEnter(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,
-                                          UPrimitiveComponent* OtherComp, int32 OtherBodyIndex,
-                                          bool bFromSweep, const FHitResult& SweepResult)
-{
-    if (Cast<APawn>(OtherActor))
-    {
-        if (UInteractionWidget* W = GetInteractionWidget())
-        {
-            W->SetPromptText(GetInteractionText_Implementation());
-            W->ShowPrompt();
-        }
-
-        Widget->SetVisibility(true);
-    }
-}
-
-void AInteractableActor::OnProximityExit(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,
-                                         UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
-{
-    if (Cast<APawn>(OtherActor))
-    {
-        if (UInteractionWidget* W = GetInteractionWidget())
-        {
-            W->HidePrompt();
-        }
-
-        Widget->SetVisibility(false);
     }
 }
 
@@ -123,7 +83,6 @@ FText AInteractableActor::GetTooltipText_Implementation() const
 
 void AInteractableActor::Interact_Implementation(AActor* Interactor)
 {
-    // Example: Print interaction feedback
     UE_LOG(LogTemp, Log, TEXT("Interacted with by: %s"), *GetNameSafe(Interactor));
     if(GEngine)
         GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, TEXT("Interact Received "));
