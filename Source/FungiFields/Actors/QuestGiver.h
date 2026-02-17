@@ -12,18 +12,14 @@ class FUNGIFIELDS_API AQuestGiver : public AActor, public IInteractableInterface
 	GENERATED_BODY()
 
 public:
-	// Sets default values for this actor's properties
 	AQuestGiver();
 
 protected:
-	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
-	
-	// Interaction interface
+
 	virtual void Interact_Implementation(AActor* Interactor) override;
 	virtual FText GetInteractionText_Implementation() override;
 
-	// ITooltipProvider implementation
 	virtual FText GetTooltipText_Implementation() const override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Quest")

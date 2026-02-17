@@ -10,6 +10,7 @@ class UTextBlock;
 class UBorder;
 class USizeBox;
 class UItemDataAsset;
+class UItemTooltipWidget;
 
 /**
  * Reusable inventory slot widget with drag & drop support.
@@ -23,27 +24,21 @@ class FUNGIFIELDS_API UInventorySlotWidget : public UUserWidget
 public:
 	UInventorySlotWidget(const FObjectInitializer& ObjectInitializer);
 
-	/** Initialize the slot with data */
 	UFUNCTION(BlueprintCallable, Category = "Inventory Slot")
 	void SetSlotData(const FInventorySlot& SlotData, int32 SlotIndex, bool bIsEquipped = false);
 
-	/** Get the slot index this widget represents */
 	UFUNCTION(BlueprintPure, Category = "Inventory Slot")
 	int32 GetSlotIndex() const { return SlotIndex; }
 
-	/** Get the current slot data */
 	UFUNCTION(BlueprintPure, Category = "Inventory Slot")
 	const FInventorySlot& GetSlotData() const { return CurrentSlotData; }
 
-	/** Set whether this slot is equipped (for visual highlighting) */
 	UFUNCTION(BlueprintCallable, Category = "Inventory Slot")
 	void SetEquipped(bool bIsEquipped);
 
-	/** Set the inventory source identifier (for drag & drop) */
 	UFUNCTION(BlueprintCallable, Category = "Inventory Slot")
 	void SetInventorySource(int32 SourceID) { InventorySourceID = SourceID; }
 
-	/** Get the inventory source identifier */
 	UFUNCTION(BlueprintPure, Category = "Inventory Slot")
 	int32 GetInventorySource() const { return InventorySourceID; }
 
@@ -71,10 +66,7 @@ protected:
 	virtual void NativeOnDragEnter(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 	virtual void NativeOnDragLeave(const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 
-	/** Update visual representation of the slot */
 	void UpdateSlotVisuals();
-
-	/** Create widget structure programmatically if Blueprint structure is missing */
 	void CreateWidgetStructure();
 
 	UPROPERTY(meta = (BindWidget))
@@ -97,9 +89,7 @@ private:
 	TObjectPtr<UImage> CachedDragIcon;
 	TObjectPtr<class USizeBox> CachedDragSizeBox;
 
+	TObjectPtr<UItemTooltipWidget> CachedItemTooltip;
+
 	void EnsureDragVisualCreated();
 };
-
-
-
-

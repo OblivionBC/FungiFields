@@ -46,16 +46,9 @@ private:
 	UPROPERTY()
 	TObjectPtr<UChestWidget> ChestWidgetInstance;
 
-	/** Open the chest widget for the interacting player */
 	void OpenChestWidgetForPlayer(AActor* Interactor);
-
-	/** Close the chest widget */
 	void CloseChestWidget();
 
-	/** Called when chest widget is closed via delegate */
 	UFUNCTION()
 	void OnChestWidgetClosed();
 };
-
-
-

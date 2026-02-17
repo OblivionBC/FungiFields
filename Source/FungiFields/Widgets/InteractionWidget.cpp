@@ -6,13 +6,11 @@ void UInteractionWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	// Initialize with default text
 	if (PromptText && !DefaultPromptText.IsEmpty())
 	{
 		PromptText->SetText(DefaultPromptText);
 	}
 
-	// Start hidden until shown
 	SetVisibility(ESlateVisibility::Hidden);
 }
 
@@ -26,7 +24,6 @@ void UInteractionWidget::SetPromptText(const FText& InText)
 
 void UInteractionWidget::ShowPrompt()
 {
-	// Make visible and play an optional animation
 	SetVisibility(ESlateVisibility::HitTestInvisible);
 
 	if (ShowAnim)
@@ -39,7 +36,6 @@ void UInteractionWidget::HidePrompt()
 {
 	if (HideAnim)
 	{
-		// When a hide animation finishes, you may want to set Hidden; for simplicity, set immediately.
 		PlayAnimation(HideAnim, 0.f, 1, EUMGSequencePlayMode::Forward, 1.f, false);
 	}
 
@@ -48,15 +44,4 @@ void UInteractionWidget::HidePrompt()
 
 void UInteractionWidget::UpdateFromActor(AActor* Interactable)
 {
-	// Optional: pull text from an interface or actor properties.
-	// Example (if you add GetInteractionText() to your interface):
-	// if (Interactable && Interactable->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass()))
-	// {
-	//     const FText Text = IInteractableInterface::Execute_GetInteractionText(Interactable);
-	//     SetPromptText(Text);
-	// }
-	// else
-	// {
-	//     SetPromptText(DefaultPromptText);
-	// }
 }

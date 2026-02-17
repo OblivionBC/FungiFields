@@ -43,7 +43,7 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Interaction", meta = (AllowPrivateAccess = "true"))
 	UInteractionComponent* InteractionComponent;
 
-	/** Interaction component for handling interactions with interactable actors */
+	/** Quest component for quest tracking and events */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Interaction", meta = (AllowPrivateAccess = "true"))
 	UQuestComponent* QuestComponent;
 	

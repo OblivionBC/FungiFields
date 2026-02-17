@@ -24,46 +24,19 @@ public:
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-	/**
-	 * Called when the interact input action is triggered.
-	 * Performs a line trace and executes interaction on hit actors.
-	 */
 	UFUNCTION(BlueprintCallable, Category = "Interaction")
 	void Interact(const FInputActionValue& Value);
 
-	/**
-	 * Sets the camera component to use for interaction traces.
-	 * Should be called from the owner's BeginPlay after components are initialized.
-	 * @param Camera The camera component to use for line traces
-	 */
+	/** Should be called from the owner's BeginPlay after components are initialized. */
 	UFUNCTION(BlueprintCallable, Category = "Interaction")
 	void SetCamera(UCameraComponent* Camera);
 
 protected:
 	virtual void BeginPlay() override;
 
-	/**
-	 * Performs a line trace from the camera to detect interactable actors.
-	 * Called every frame in TickComponent.
-	 */
 	void TraceForInteractable();
-
-	/**
-	 * Clears the current interactable reference and hides the widget.
-	 * Called by timer when no interactable is detected.
-	 */
 	void ClearInteractable();
-
-	/**
-	 * Shows the interaction widget with the specified prompt text.
-	 * @param Interactable The actor that can be interacted with
-	 * @param Prompt The text to display in the interaction widget
-	 */
 	void ShowInteractionWidget(AActor* Interactable, const FText& Prompt);
-
-	/**
-	 * Hides the interaction widget.
-	 */
 	void HideInteractionWidget();
 
 protected:

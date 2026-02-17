@@ -24,6 +24,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties")
 	FText ItemName;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties")
+	FText ItemDescription;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties", meta = (ClampMin = "1"))
 	int32 MaxStackSize = 1;
 

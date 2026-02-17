@@ -349,8 +349,6 @@ void AFungiFieldsCharacter::OnItemEquipped(UItemDataAsset* Item, int32 SlotIndex
 	{
 		if (Item && Item->bIsPlaceable)
 		{
-			// Check if it's a different placeable item - if so, update placement mode
-			// EnterPlacementMode will handle updating the preview actor
 			PlacementComponent->EnterPlacementMode(Item);
 		}
 		else

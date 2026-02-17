@@ -1,4 +1,5 @@
 #include "UInventorySlotWidget.h"
+#include "UItemTooltipWidget.h"
 #include "UInventoryDragDropOperation.h"
 #include "Components/Border.h"
 #include "Components/Image.h"
@@ -171,8 +172,8 @@ void UInventorySlotWidget::UpdateSlotVisuals()
 		SlotBorder->SetBrushColor(FLinearColor::White);
 		FSlateBrush NormalBrush;
 		NormalBrush.DrawAs = ESlateBrushDrawType::Box;
-		NormalBrush.Margin = FMargin(2.0f); // Increased margin for visible border
-		NormalBrush.TintColor = FSlateColor(FLinearColor(0.3f, 0.3f, 0.3f, 1.0f)); // Darker border for visibility
+		NormalBrush.Margin = FMargin(2.0f);
+		NormalBrush.TintColor = FSlateColor(FLinearColor(0.3f, 0.3f, 0.3f, 1.0f));
 		SlotBorder->SetBrush(NormalBrush);
 		SlotBorder->SetPadding(FMargin(2.0f));
 	}
@@ -217,6 +218,27 @@ void UInventorySlotWidget::UpdateSlotVisuals()
 			ItemCount->SetText(FText::GetEmpty());
 		}
 	}
+
+	if (SlotBorder)
+	{
+		if (CurrentSlotData.IsEmpty() || !CurrentSlotData.ItemDefinition)
+		{
+			SlotBorder->SetToolTip(nullptr);
+		}
+		else
+		{
+			const UItemDataAsset* ItemDef = CurrentSlotData.ItemDefinition;
+			if (!CachedItemTooltip)
+			{
+				CachedItemTooltip = CreateWidget<UItemTooltipWidget>(this, UItemTooltipWidget::StaticClass());
+			}
+			if (CachedItemTooltip)
+			{
+				CachedItemTooltip->SetContent(ItemDef->ItemName, ItemDef->ItemDescription);
+				SlotBorder->SetToolTip(CachedItemTooltip);
+			}
+		}
+	}
 }
 
 FReply UInventorySlotWidget::NativeOnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
@@ -247,14 +269,12 @@ void UInventorySlotWidget::EnsureDragVisualCreated()
 		return;
 	}
 
-	// Create SizeBox to control the drag visual size
 	CachedDragSizeBox = NewObject<USizeBox>(GetWorld());
 	if (!CachedDragSizeBox)
 	{
 		return;
 	}
 
-	// Create Border as the visual container
 	CachedDragVisual = NewObject<UBorder>(GetWorld());
 	if (!CachedDragVisual)
 	{
@@ -268,14 +288,12 @@ void UInventorySlotWidget::EnsureDragVisualCreated()
 	CachedDragVisual->SetBrush(DefaultBrush);
 	CachedDragVisual->SetPadding(FMargin(2.0f));
 
-	// Create Image for the item icon
 	CachedDragIcon = NewObject<UImage>(GetWorld());
 	if (CachedDragIcon)
 	{
 		CachedDragVisual->AddChild(CachedDragIcon);
 	}
 
-	// Add Border to SizeBox
 	CachedDragSizeBox->AddChild(CachedDragVisual);
 }
 
@@ -299,14 +317,11 @@ void UInventorySlotWidget::NativeOnDragDetected(const FGeometry& MyGeometry, con
 			
 			if (CachedDragSizeBox && CachedDragVisual)
 			{
-				// Get the slot size from the geometry
 				FVector2D SlotSize = MyGeometry.GetLocalSize();
-				
-				// Set fixed size on the SizeBox to control drag visual size
+
 				CachedDragSizeBox->SetWidthOverride(SlotSize.X);
 				CachedDragSizeBox->SetHeightOverride(SlotSize.Y);
-				
-				// Update the visual appearance
+
 				CachedDragVisual->SetBrushColor(SlotBorder->GetBrushColor());
 				
 				if (CachedDragIcon && CurrentSlotData.ItemDefinition && CurrentSlotData.ItemDefinition->ItemIcon)

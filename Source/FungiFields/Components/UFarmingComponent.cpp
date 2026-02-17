@@ -537,7 +537,12 @@ void UFarmingComponent::TraceForFarmable()
 							}
 							else
 							{
-								UE_LOG(LogTemp, VeryVerbose, TEXT("UFarmingComponent::TraceForFarmable: Cannot accept soil bag"));
+								FText BlockedReason = IFarmableInterface::Execute_GetCannotAcceptSoilBagReason(HitActor);
+								if (!BlockedReason.IsEmpty())
+								{
+									TooltipText = BlockedReason;
+									bShouldShowTooltip = true;
+								}
 							}
 						}
 						else
@@ -557,6 +562,15 @@ void UFarmingComponent::TraceForFarmable()
 			FString SeedName = EquippedSeedData->CropToPlant->CropName.ToString();
 			TooltipText = FText::FromString(FString::Printf(TEXT("Left Click to Plant %s"), *SeedName));
 			bShouldShowTooltip = true;
+		}
+		else
+		{
+			FText BlockedReason = IFarmableInterface::Execute_GetCannotPlantReason(HitActor);
+			if (!BlockedReason.IsEmpty())
+			{
+				TooltipText = BlockedReason;
+				bShouldShowTooltip = true;
+			}
 		}
 	}
 	else if (bHasValidTool && HitActor->Implements<UFarmableInterface>())
@@ -582,24 +596,30 @@ void UFarmingComponent::TraceForFarmable()
 				bShouldShowTooltip = true;
 			}
 		}
-	}
-	else if (bHasValidTool && HitActor->Implements<UHarvestableInterface>())
-	{
-		if (CurrentToolType == EToolType::Scythe && IHarvestableInterface::Execute_CanHarvest(HitActor))
+		else if (CurrentToolType != EToolType::Scythe)
 		{
-			if (HitActor->Implements<UTooltipProvider>())
+			FText BlockedReason = IFarmableInterface::Execute_GetCannotUseToolReason(HitActor, CurrentToolType);
+			if (!BlockedReason.IsEmpty())
 			{
-				TooltipText = ITooltipProvider::Execute_GetTooltipText(HitActor);
-			}
-			else
-			{
-				TooltipText = IHarvestableInterface::Execute_GetHarvestText(HitActor);
-			}
-			if (!TooltipText.IsEmpty())
-			{
-				TooltipText = FText::FromString(FString::Printf(TEXT("Left Click to %s"), *TooltipText.ToString()));
+				TooltipText = BlockedReason;
 				bShouldShowTooltip = true;
 			}
+		}
+	}
+	else if (bHasValidTool && HitActor->Implements<UHarvestableInterface>() && CurrentToolType == EToolType::Scythe)
+	{
+		if (HitActor->Implements<UTooltipProvider>())
+		{
+			TooltipText = ITooltipProvider::Execute_GetTooltipText(HitActor);
+		}
+		else
+		{
+			TooltipText = IHarvestableInterface::Execute_GetHarvestText(HitActor);
+		}
+		if (!TooltipText.IsEmpty())
+		{
+			TooltipText = FText::FromString(FString::Printf(TEXT("Left Click to %s"), *TooltipText.ToString()));
+			bShouldShowTooltip = true;
 		}
 	}
 

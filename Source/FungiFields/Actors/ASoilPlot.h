@@ -29,7 +29,6 @@ public:
 
 	virtual void BeginPlay() override;
 
-	// IFarmableInterface implementation
 	virtual bool InteractTool_Implementation(EToolType ToolType, AActor* Instigator, float ToolPower) override;
 	virtual bool CanAcceptSeed_Implementation() const override;
 	virtual bool PlantSeed_Implementation(UCropDataAsset* CropToPlant, AActor* Planter) override;
@@ -39,8 +38,10 @@ public:
 	virtual float GetInteractionRange_Implementation() const override;
 	virtual bool CanAcceptSoilBag_Implementation(class UItemDataAsset* SoilBagItem) const override;
 	virtual bool AddSoilFromBag_Implementation(class UItemDataAsset* SoilBagItem) override;
+	virtual FText GetCannotPlantReason_Implementation() const override;
+	virtual FText GetCannotUseToolReason_Implementation(EToolType ToolType) const override;
+	virtual FText GetCannotAcceptSoilBagReason_Implementation() const override;
 
-	// ITooltipProvider implementation
 	virtual FText GetTooltipText_Implementation() const override;
 
 	/**
@@ -59,62 +60,31 @@ public:
 	 */
 	void Initialize(USoilDataAsset* InSoilData);
 
-	/**
-	 * Get the soil component.
-	 * @return The soil component
-	 */
 	UFUNCTION(BlueprintPure, Category = "Soil Plot")
 	USoilComponent* GetSoilComponent() const { return SoilComponent; }
 
 protected:
-	/**
-	 * Update visual representation based on soil state.
-	 * Called when soil is tilled or water level changes.
-	 */
 	UFUNCTION()
 	void UpdateVisuals();
 
-	/**
-	 * Handler for soil tilled delegate.
-	 */
 	UFUNCTION()
 	void OnSoilTilled(AActor* Soil);
 
-	/**
-	 * Handler for crop planted delegate.
-	 */
 	UFUNCTION()
 	void OnCropPlanted(AActor* Soil, ACropBase* Crop);
 
-	/**
-	 * Handler for crop removed delegate.
-	 */
 	UFUNCTION()
 	void OnCropRemoved(AActor* Soil);
 
-	/**
-	 * Handler for water level changed delegate.
-	 */
 	UFUNCTION()
 	void OnWaterLevelChanged(AActor* Soil, float NewWaterLevel);
 
-	/**
-	 * Handler for soil state changed delegate.
-	 */
 	UFUNCTION()
 	void OnSoilStateChanged(AActor* Soil, ESoilState NewState);
 
-	/**
-	 * Spawn a crop actor on this soil plot.
-	 * @param CropData The crop data asset to spawn
-	 * @return The spawned crop actor, or nullptr if failed
-	 */
+	/** @return The spawned crop actor, or nullptr if failed */
 	ACropBase* SpawnCrop(UCropDataAsset* CropData);
 
-	/**
-	 * Internal method to initialize soil data.
-	 * @param InSoilData The soil data asset to use for configuration, or nullptr for empty plot
-	 */
 	void InitializeSoil(USoilDataAsset* InSoilData);
 
 	/** Soil component managing state and water */

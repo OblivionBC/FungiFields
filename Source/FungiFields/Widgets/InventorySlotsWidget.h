@@ -6,10 +6,9 @@
 
 class UInventoryComponent;
 class AFungiFieldsCharacter;
-class UImage;
 class UTextBlock;
-class UBorder;
 class UHorizontalBox;
+class UInventorySlotWidget;
 struct FInventorySlot;
 
 /**
@@ -30,6 +29,10 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> EquippedItemNameText;
 
+	/** Optional slot widget class (e.g. from Blueprint). If not set, uses UInventorySlotWidget. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Hotbar")
+	TSubclassOf<UInventorySlotWidget> SlotWidgetClass;
+
 	virtual void NativeConstruct() override;
 
 private:
@@ -46,15 +49,18 @@ private:
 
 	void UpdateSlotVisuals();
 
-	UWidget* GetOrCreateSlotWidget(int32 SlotIndex);
+	UInventorySlotWidget* GetOrCreateSlotWidget(int32 SlotIndex);
 
-	void UpdateSlotWidget(UWidget* SlotWidget, const FInventorySlot& SlotData, int32 SlotIndex, bool bIsEquipped);
+	void UpdateSlotWidget(UInventorySlotWidget* SlotWidget, const FInventorySlot& SlotData, int32 SlotIndex, bool bIsEquipped);
+
+	UFUNCTION()
+	void HandleSlotClicked(int32 SlotIndex, int32 InventorySourceID);
 
 	UPROPERTY()
 	TObjectPtr<UInventoryComponent> CachedInventoryComponent;
 
 	UPROPERTY()
-	TArray<TObjectPtr<UWidget>> SlotWidgets;
+	TArray<TObjectPtr<UInventorySlotWidget>> SlotWidgets;
 
 	static constexpr int32 HotbarSize = 9;
 };

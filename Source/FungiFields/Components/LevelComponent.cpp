@@ -4,14 +4,11 @@
 #include "FungiFields/Attributes/LevelAttributeSet.h"
 
 
-// Sets default values for this component's properties
 ULevelComponent::ULevelComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
 }
 
-
-// Called when the game starts
 void ULevelComponent::BeginPlay()
 {
 	Super::BeginPlay();
@@ -92,6 +89,4 @@ void ULevelComponent::LowerByMaxXP(int MaxXP) const
 		-MaxXP
 	);
 }
-
-
 

@@ -8,7 +8,6 @@ class USeedDataAsset;
 class UItemDataAsset;
 #include "QuestComponent.generated.h"
 
-// Forward declarations
 class AActor;
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))

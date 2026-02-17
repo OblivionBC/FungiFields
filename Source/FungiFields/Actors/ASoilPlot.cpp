@@ -324,6 +324,74 @@ FText ASoilPlot::GetTooltipText_Implementation() const
 	return GetInteractionText_Implementation();
 }
 
+FText ASoilPlot::GetCannotPlantReason_Implementation() const
+{
+	if (!SoilComponent)
+	{
+		return FText::GetEmpty();
+	}
+	if (!SoilComponent->HasSoil())
+	{
+		return FText::FromString(TEXT("Add soil to the plot first"));
+	}
+	if (!SoilComponent->IsTilled())
+	{
+		return FText::FromString(TEXT("Till the soil first to plant"));
+	}
+	if (SoilComponent->GetCrop())
+	{
+		return FText::FromString(TEXT("Remove the crop first"));
+	}
+	return FText::GetEmpty();
+}
+
+FText ASoilPlot::GetCannotUseToolReason_Implementation(EToolType ToolType) const
+{
+	if (!SoilComponent)
+	{
+		return FText::GetEmpty();
+	}
+	switch (ToolType)
+	{
+	case EToolType::Hoe:
+		if (!SoilComponent->HasSoil())
+		{
+			return FText::FromString(TEXT("Add soil to the plot first"));
+		}
+		if (SoilComponent->IsTilled())
+		{
+			return FText::FromString(TEXT("Soil is already tilled"));
+		}
+		break;
+	case EToolType::WateringCan:
+		if (!SoilComponent->HasSoil())
+		{
+			return FText::FromString(TEXT("Add soil to the plot first"));
+		}
+		if (!SoilComponent->IsTilled())
+		{
+			return FText::FromString(TEXT("Till the soil first"));
+		}
+		break;
+	default:
+		break;
+	}
+	return FText::GetEmpty();
+}
+
+FText ASoilPlot::GetCannotAcceptSoilBagReason_Implementation() const
+{
+	if (!SoilComponent)
+	{
+		return FText::GetEmpty();
+	}
+	if (SoilComponent->HasSoil())
+	{
+		return FText::FromString(TEXT("Plot already has soil"));
+	}
+	return FText::GetEmpty();
+}
+
 FVector ASoilPlot::GetActionLocation_Implementation() const
 {
 	FVector Location = GetActorLocation();
@@ -477,4 +545,3 @@ bool ASoilPlot::AddSoilFromBag_Implementation(UItemDataAsset* SoilBagItem)
 	Initialize(SoilBagItem->SoilBagSoilDataAsset);
 	return true;
 }
-
