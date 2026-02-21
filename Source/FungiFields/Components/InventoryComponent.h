@@ -159,9 +159,9 @@ private:
 	/**
 	 * Attaches or removes mesh based on equipped item.
 	 */
-	void UpdateEquippedItemMesh();
+	void UpdateEquippedItemActor();
 
 	UPROPERTY()
-	TObjectPtr<UStaticMeshComponent> EquippedItemMeshComponent;
+	TObjectPtr<AActor> EquippedItemActor;
 };
 

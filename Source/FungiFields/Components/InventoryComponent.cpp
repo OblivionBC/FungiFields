@@ -150,7 +150,7 @@ void UInventoryComponent::BroadcastUpdate()
 {
 	if (bSupportsEquipping)
 	{
-		UpdateEquippedItemMesh();
+		UpdateEquippedItemActor();
 	}
 	OnInventoryChanged.Broadcast();
 }
@@ -160,7 +160,7 @@ void UInventoryComponent::OnRep_InventorySlots()
 	BroadcastUpdate();
 }
 
-void UInventoryComponent::UpdateEquippedItemMesh()
+void UInventoryComponent::UpdateEquippedItemActor()
 {
 	if (!bSupportsEquipping)
 	{
@@ -185,10 +185,10 @@ void UInventoryComponent::UpdateEquippedItemMesh()
 		return;
 	}
 
-	if (EquippedItemMeshComponent)
+	if (EquippedItemActor)
 	{
-		EquippedItemMeshComponent->DestroyComponent();
-		EquippedItemMeshComponent = nullptr;
+		EquippedItemActor->Destroy();
+		EquippedItemActor = nullptr;
 	}
 
 	if (CurrentEquippedSlotIndex == INDEX_NONE)
@@ -207,31 +207,25 @@ void UInventoryComponent::UpdateEquippedItemMesh()
 		return;
 	}
 
-	UStaticMesh* ItemMesh = EquippedSlot.ItemDefinition->ItemMesh;
-	if (!ItemMesh)
+	TSubclassOf<AActor> ItemActorClass = EquippedSlot.ItemDefinition->ItemActor;
+	if (!ItemActorClass)
+	{
+		return;
+	}
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	EquippedItemActor = GetWorld()->SpawnActor<AActor>(ItemActorClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
+	if (!EquippedItemActor)
 	{
 		return;
 	}
 
-	EquippedItemMeshComponent = NewObject<UStaticMeshComponent>(Owner, UStaticMeshComponent::StaticClass(), TEXT("EquippedItemMesh"));
-	if (!EquippedItemMeshComponent)
-	{
-		return;
-	}
-
-	EquippedItemMeshComponent->SetStaticMesh(ItemMesh);
-	EquippedItemMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	EquippedItemMeshComponent->SetGenerateOverlapEvents(false);
-	EquippedItemMeshComponent->SetVisibility(true);
-	EquippedItemMeshComponent->SetHiddenInGame(false);
-
-	EquippedItemMeshComponent->AttachToComponent(
+	EquippedItemActor->SetActorEnableCollision(false);
+	EquippedItemActor->AttachToComponent(
 		CharacterMesh,
 		FAttachmentTransformRules::SnapToTargetNotIncludingScale,
 		FName("RightHandItemSlot")
 	);
-
-	EquippedItemMeshComponent->RegisterComponent();
 }
 
 void UInventoryComponent::EquipSlot(const FInputActionValue& Value, int32 SlotIndex)
@@ -256,7 +250,7 @@ void UInventoryComponent::EquipSlot(const FInputActionValue& Value, int32 SlotIn
 		EquippedItem = const_cast<UItemDataAsset*>(InventorySlots[SlotIndex].ItemDefinition.Get());
 	}
 	
-	UpdateEquippedItemMesh();
+	UpdateEquippedItemActor();
 	
 	if (EquippedItem)
 	{
@@ -302,7 +296,7 @@ bool UInventoryComponent::ConsumeFromSlot(int32 SlotIndex, int32 Amount)
 
 	if (bSupportsEquipping && CurrentEquippedSlotIndex == SlotIndex)
 	{
-		UpdateEquippedItemMesh();
+		UpdateEquippedItemActor();
 	}
 
 	int32 NewTotal = GetItemTotalCount(const_cast<UItemDataAsset*>(ItemToRemove));
@@ -346,7 +340,7 @@ bool UInventoryComponent::RemoveFromSlot(int32 SlotIndex, int32 Amount)
 
 	if (bSupportsEquipping && CurrentEquippedSlotIndex == SlotIndex)
 	{
-		UpdateEquippedItemMesh();
+		UpdateEquippedItemActor();
 	}
 
 	BroadcastUpdate();
@@ -411,7 +405,7 @@ bool UInventoryComponent::MoveItemToSlot(int32 FromSlotIndex, int32 ToSlotIndex)
 			}
 			else if (CurrentEquippedSlotIndex == ToSlotIndex)
 			{
-				UpdateEquippedItemMesh();
+				UpdateEquippedItemActor();
 			}
 		}
 		
@@ -438,11 +432,11 @@ bool UInventoryComponent::MoveItemToSlot(int32 FromSlotIndex, int32 ToSlotIndex)
 			{
 				if (CurrentEquippedSlotIndex == FromSlotIndex && FromSlot.IsEmpty())
 				{
-					UpdateEquippedItemMesh();
+					UpdateEquippedItemActor();
 				}
 				else if (CurrentEquippedSlotIndex == ToSlotIndex)
 				{
-					UpdateEquippedItemMesh();
+					UpdateEquippedItemActor();
 				}
 			}
 
@@ -480,12 +474,12 @@ bool UInventoryComponent::SwapSlots(int32 SlotAIndex, int32 SlotBIndex)
 		if (CurrentEquippedSlotIndex == SlotAIndex)
 		{
 			CurrentEquippedSlotIndex = SlotBIndex;
-			UpdateEquippedItemMesh();
+			UpdateEquippedItemActor();
 		}
 		else if (CurrentEquippedSlotIndex == SlotBIndex)
 		{
 			CurrentEquippedSlotIndex = SlotAIndex;
-			UpdateEquippedItemMesh();
+			UpdateEquippedItemActor();
 		}
 	}
 

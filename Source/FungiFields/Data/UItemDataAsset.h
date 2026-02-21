@@ -34,9 +34,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties")
 	UTexture2D* ItemIcon;
 
-	/** Mesh to display when item is equipped (attached to RightHandItemSlot socket) */
+	/** Actor to spawn when item is equipped (attached to RightHandItemSlot socket) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties")
-	UStaticMesh* ItemMesh;
+	TSubclassOf<AActor> ItemActor;
 
 	/** If true, this item can be placed in the world (e.g., soil containers) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Placement")
