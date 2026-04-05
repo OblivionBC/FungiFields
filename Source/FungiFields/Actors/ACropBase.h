@@ -33,15 +33,13 @@ public:
 	virtual float GetInteractionRange_Implementation() const override;
 
 	virtual FText GetTooltipText_Implementation() const override;
+	virtual UCropDataAsset* GetCropData_Implementation() const override { return CropDataAsset; }
 
 	UFUNCTION(BlueprintCallable, Category = "Crop")
 	void Initialize(UCropDataAsset* InCropData, ASoilPlot* InParentSoil);
 
 	UFUNCTION(BlueprintPure, Category = "Crop")
 	UCropGrowthComponent* GetGrowthComponent() const { return GrowthComponent; }
-
-	UFUNCTION(BlueprintPure, Category = "Crop")
-	UCropDataAsset* GetCropData() const { return CropDataAsset; }
 
 protected:
 	UFUNCTION()

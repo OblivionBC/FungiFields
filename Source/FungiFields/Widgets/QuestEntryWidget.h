@@ -2,10 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "FungiFields/Data/Quest.h"
 #include "QuestEntryWidget.generated.h"
 
 class UTextBlock;
-class UQuest;
 
 UCLASS()
 class FUNGIFIELDS_API UQuestEntryWidget : public UUserWidget
@@ -14,7 +14,7 @@ class FUNGIFIELDS_API UQuestEntryWidget : public UUserWidget
 
 public:
 	UFUNCTION(BlueprintCallable)
-	void Setup(UQuest* InQuest);
+	void Setup(const UQuest* QuestDef, const FQuestProgress& Progress);
 
 protected:
 	UPROPERTY(meta = (BindWidget))
@@ -23,7 +23,6 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* ProgressText;
 
-private:
-	UPROPERTY()
-	UQuest* Quest;
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* StateText;
 };

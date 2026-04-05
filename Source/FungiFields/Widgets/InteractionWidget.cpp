@@ -1,6 +1,6 @@
 #include "InteractionWidget.h"
 #include "Components/TextBlock.h"
-#include "Kismet/KismetTextLibrary.h"
+#include "FungiFields/Interfaces/InteractableInterface.h"
 
 void UInteractionWidget::NativeConstruct()
 {
@@ -44,4 +44,9 @@ void UInteractionWidget::HidePrompt()
 
 void UInteractionWidget::UpdateFromActor(AActor* Interactable)
 {
+	if (!Interactable || !Interactable->Implements<UInteractableInterface>())
+		return;
+
+	SetPromptText(IInteractableInterface::Execute_GetInteractionText(Interactable));
+	ShowPrompt();
 }

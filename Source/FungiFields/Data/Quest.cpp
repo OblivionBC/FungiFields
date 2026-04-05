@@ -6,77 +6,69 @@
 bool UQuest::ShouldRespondToItemAdded(UItemDataAsset* Item, int32 Quantity) const
 {
 	if (QuestEventType != EQuestEventType::ItemAdded)
-	{
 		return false;
-	}
 
-	if (!RequiredItem.IsValid())
-	{
-		return true;
-	}
+	return !RequiredItem || RequiredItem == Item;
+}
 
-	UItemDataAsset* RequiredItemPtr = RequiredItem.LoadSynchronous();
-	return RequiredItemPtr && Item == RequiredItemPtr;
+bool UQuest::ShouldRespondToItemRemoved(UItemDataAsset* Item, int32 Quantity) const
+{
+	if (QuestEventType != EQuestEventType::ItemRemoved)
+		return false;
+
+	return !RequiredItem || RequiredItem == Item;
 }
 
 bool UQuest::ShouldRespondToCropHarvested(UCropDataAsset* CropData, int32 Quantity) const
 {
 	if (QuestEventType != EQuestEventType::CropHarvested)
-	{
 		return false;
-	}
 
-	if (!RequiredCrop.IsValid())
-	{
-		return true;
-	}
+	return !RequiredCrop || RequiredCrop == CropData;
+}
 
-	UCropDataAsset* RequiredCropPtr = RequiredCrop.LoadSynchronous();
-	return RequiredCropPtr && CropData == RequiredCropPtr;
+bool UQuest::ShouldRespondToCropFullyGrown(UCropDataAsset* CropData) const
+{
+	if (QuestEventType != EQuestEventType::CropFullyGrown)
+		return false;
+
+	return !RequiredCrop || RequiredCrop == CropData;
+}
+
+bool UQuest::ShouldRespondToCropWithered(UCropDataAsset* CropData) const
+{
+	if (QuestEventType != EQuestEventType::CropWithered)
+		return false;
+
+	return !RequiredCrop || RequiredCrop == CropData;
 }
 
 bool UQuest::ShouldRespondToSeedPlanted(USeedDataAsset* SeedData) const
 {
 	if (QuestEventType != EQuestEventType::SeedPlanted)
-	{
 		return false;
-	}
 
-	if (!RequiredSeed.IsValid())
-	{
-		return true;
-	}
-
-	USeedDataAsset* RequiredSeedPtr = RequiredSeed.LoadSynchronous();
-	return RequiredSeedPtr && SeedData == RequiredSeedPtr;
+	return !RequiredSeed || RequiredSeed == SeedData;
 }
 
-void UQuest::StartQuest()
+void UQuest::StartQuest(FQuestProgress& Progress) const
 {
-	if (State == EQuestState::NotStarted)
-	{
-		State = EQuestState::InProgress;
-	}
+	if (Progress.State == EQuestState::NotStarted)
+		Progress.State = EQuestState::InProgress;
 }
 
-void UQuest::AddProgress(int32 Amount)
+void UQuest::AddProgress(FQuestProgress& Progress, int32 Amount) const
 {
-	if (State != EQuestState::InProgress || Amount <= 0)
+	if (Progress.State != EQuestState::InProgress || Amount <= 0)
 		return;
 
-	CurrentProgress += Amount;
-
-	if (CurrentProgress >= RequiredProgress)
-	{
-		State = EQuestState::Completed;
-		CurrentProgress = RequiredProgress;
-	}
+	Progress.CurrentProgress = FMath::Min(Progress.CurrentProgress + Amount, RequiredProgress);
+	if (Progress.CurrentProgress >= RequiredProgress)
+		Progress.State = EQuestState::Completed;
 }
 
-void UQuest::FailQuest()
+void UQuest::FailQuest(FQuestProgress& Progress) const
 {
-	if (State == EQuestState::InProgress)
-	{
-		State = EQuestState::Failed;
-	}
+	if (Progress.State == EQuestState::InProgress)
+		Progress.State = EQuestState::Failed;
 }

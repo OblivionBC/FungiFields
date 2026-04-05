@@ -5,6 +5,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/Controller.h"
+#include "GameFramework/PlayerController.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
@@ -29,6 +30,11 @@
 #include "Misc/CoreMiscDefines.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
+
+namespace
+{
+	constexpr int32 ModalMenuZOrder = 10000;
+}
 
 AFungiFieldsCharacter::AFungiFieldsCharacter()
 {
@@ -145,7 +151,7 @@ void AFungiFieldsCharacter::BeginPlay()
 			if (QuestMenuWidget)
 			{
 				QuestMenuWidget->SetOwningPlayer(PC);
-				QuestMenuWidget->AddToViewport();
+				QuestMenuWidget->AddToViewport(ModalMenuZOrder);
 				QuestMenuWidget->SetVisibility(ESlateVisibility::Hidden);
 				QuestMenuWidget->OnQuestMenuClosed.AddDynamic(this, &AFungiFieldsCharacter::OnQuestMenuClosed);
 			}
@@ -157,7 +163,7 @@ void AFungiFieldsCharacter::BeginPlay()
 			if (BackpackWidget)
 			{
 				BackpackWidget->SetOwningPlayer(PC);
-				BackpackWidget->AddToViewport();
+				BackpackWidget->AddToViewport(ModalMenuZOrder);
 				BackpackWidget->SetVisibility(ESlateVisibility::Hidden);
 				BackpackWidget->OnBackpackClosed.AddDynamic(this, &AFungiFieldsCharacter::OnBackpackClosed);
 			}
@@ -275,6 +281,48 @@ void AFungiFieldsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 	}
 }
 
+void AFungiFieldsCharacter::PushGameplayMenuInputBlock()
+{
+	if (GameplayMenuInputBlockCount == 0)
+	{
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			PC->SetIgnoreMoveInput(true);
+			PC->SetIgnoreLookInput(true);
+		}
+	}
+	++GameplayMenuInputBlockCount;
+}
+
+void AFungiFieldsCharacter::PopGameplayMenuInputBlock()
+{
+	if (GameplayMenuInputBlockCount <= 0)
+	{
+		return;
+	}
+	--GameplayMenuInputBlockCount;
+	RefreshGameplayMenuInputBlock();
+}
+
+void AFungiFieldsCharacter::RefreshGameplayMenuInputBlock()
+{
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		const bool bBlock = GameplayMenuInputBlockCount > 0;
+		PC->SetIgnoreMoveInput(bBlock);
+		PC->SetIgnoreLookInput(bBlock);
+	}
+}
+
+void AFungiFieldsCharacter::Jump()
+{
+	if (GameplayMenuInputBlockCount > 0)
+	{
+		return;
+	}
+	Super::Jump();
+}
+
 void AFungiFieldsCharacter::Move(const FInputActionValue& Value)
 {
 	FVector2D MovementVector = Value.Get<FVector2D>();
@@ -317,7 +365,7 @@ void AFungiFieldsCharacter::ToggleQuestMenu(const FInputActionValue& Value)
 
 	if (!bQuestMenuVisible)
 	{
-		this->GetCharacterMovement()->StopMovementImmediately();
+		PushGameplayMenuInputBlock();
 		QuestMenuWidget->RefreshQuests();
 		QuestMenuWidget->SetVisibility(ESlateVisibility::Visible);
 		bQuestMenuVisible = true;
@@ -331,6 +379,7 @@ void AFungiFieldsCharacter::ToggleQuestMenu(const FInputActionValue& Value)
 	{
 		QuestMenuWidget->SetVisibility(ESlateVisibility::Hidden);
 		bQuestMenuVisible = false;
+		PopGameplayMenuInputBlock();
 		FInputModeGameOnly Mode;
 		PC->SetInputMode(Mode);
 		PC->bShowMouseCursor = false;
@@ -379,6 +428,7 @@ void AFungiFieldsCharacter::OnQuestMenuClosed()
 	QuestMenuWidget->SetVisibility(ESlateVisibility::Hidden);
 	bQuestMenuVisible = false;
 
+	PopGameplayMenuInputBlock();
 	FInputModeGameOnly Mode;
 	PC->SetInputMode(Mode);
 	PC->bShowMouseCursor = false;
@@ -398,11 +448,11 @@ void AFungiFieldsCharacter::ToggleBackpack(const FInputActionValue& Value)
 
 	if (!bBackpackVisible)
 	{
-		this->GetCharacterMovement()->StopMovementImmediately();
+		PushGameplayMenuInputBlock();
 		
 		if (!BackpackWidget->IsInViewport())
 		{
-			BackpackWidget->AddToViewport();
+			BackpackWidget->AddToViewport(ModalMenuZOrder);
 		}
 		
 		BackpackWidget->RefreshInventory();
@@ -432,6 +482,7 @@ void AFungiFieldsCharacter::OnBackpackClosed()
 
 	BackpackWidget->SetVisibility(ESlateVisibility::Hidden);
 	bBackpackVisible = false;
+	PopGameplayMenuInputBlock();
 	FInputModeGameOnly Mode;
 	PC->SetInputMode(Mode);
 	PC->bShowMouseCursor = false;

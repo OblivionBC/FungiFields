@@ -28,6 +28,11 @@ public:
 protected:
 	virtual void NativeConstruct() override;
 
+	virtual void NativeDestruct() override;
+
+	UFUNCTION()
+	void HandleQuestsUpdated();
+
 	UPROPERTY(meta = (BindWidget))
 	UVerticalBox* QuestList;
 
@@ -36,4 +41,7 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly)
 	TSubclassOf<class UQuestEntryWidget> QuestEntryWidgetClass;
+
+	UPROPERTY()
+	UQuestComponent* BoundQuestComponent = nullptr;
 };

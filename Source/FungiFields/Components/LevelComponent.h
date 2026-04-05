@@ -24,18 +24,15 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
-	/** Cached Level Attribute Set containing Level and XP attributes. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Attributes", meta = (AllowPrivateAccess = "true"))
 	const ULevelAttributeSet* LevelAttributeSet;
 
-	/** Cached Ability System Component */
 	UPROPERTY()
 	UAbilitySystemComponent* ASC;
-	
+
 private:
-	/** Bind the level up delegates to functions */
 	void BindDelegates();
-	void CheckLevelUp(const FOnAttributeChangeData& Data) const;
-	void LevelUp(int Levels) const;
-	void LowerByMaxXP(int MaxXP) const;
+	void CheckLevelUp(const FOnAttributeChangeData& Data);
+	void LevelUp(int Levels);
+	void LowerByMaxXP(int MaxXP);
 };

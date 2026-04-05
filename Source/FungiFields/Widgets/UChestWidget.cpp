@@ -379,45 +379,21 @@ bool UChestWidget::HandleItemTransfer(int32 SourceSlotIndex, int32 SourceInvento
 	{
 		if (ChestInventory)
 		{
-			return ChestInventory->SwapSlots(SourceSlotIndex, TargetSlotIndex);
+			return ChestInventory->MoveItemToSlot(SourceSlotIndex, TargetSlotIndex);
 		}
 	}
 	else if (SourceInventoryID == 0 && TargetInventoryID == 1)
 	{
 		if (PlayerInventory && ChestInventory)
 		{
-			const TArray<FInventorySlot>& PlayerSlots = PlayerInventory->GetInventorySlots();
-			if (PlayerSlots.IsValidIndex(SourceSlotIndex) && !PlayerSlots[SourceSlotIndex].IsEmpty())
-			{
-				const FInventorySlot& SourceSlot = PlayerSlots[SourceSlotIndex];
-				if (SourceSlot.ItemDefinition)
-				{
-					if (ChestInventory->TryAddItem(const_cast<UItemDataAsset*>(SourceSlot.ItemDefinition.Get()), SourceSlot.Count))
-					{
-						PlayerInventory->ConsumeFromSlot(SourceSlotIndex, SourceSlot.Count);
-						return true;
-					}
-				}
-			}
+			return PlayerInventory->TransferStackToOtherInventorySlot(ChestInventory, SourceSlotIndex, TargetSlotIndex);
 		}
 	}
 	else if (SourceInventoryID == 1 && TargetInventoryID == 0)
 	{
 		if (PlayerInventory && ChestInventory)
 		{
-			const TArray<FInventorySlot>& ChestSlots = ChestInventory->GetInventorySlots();
-			if (ChestSlots.IsValidIndex(SourceSlotIndex) && !ChestSlots[SourceSlotIndex].IsEmpty())
-			{
-				const FInventorySlot& SourceSlot = ChestSlots[SourceSlotIndex];
-				if (SourceSlot.ItemDefinition)
-				{
-					if (PlayerInventory->TryAddItem(const_cast<UItemDataAsset*>(SourceSlot.ItemDefinition.Get()), SourceSlot.Count))
-					{
-						ChestInventory->RemoveFromSlot(SourceSlotIndex, SourceSlot.Count);
-						return true;
-					}
-				}
-			}
+			return ChestInventory->TransferStackToOtherInventorySlot(PlayerInventory, SourceSlotIndex, TargetSlotIndex);
 		}
 	}
 

@@ -6,6 +6,8 @@
 #include "ITooltipProvider.h"
 #include "IHarvestableInterface.generated.h"
 
+class UCropDataAsset;
+
 /**
  * Interface for actors that can be harvested (crops, etc.).
  * Allows decoupled harvest interaction without direct casting.
@@ -35,4 +37,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Farming")
 	float GetInteractionRange() const;
+
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Farming")
+	UCropDataAsset* GetCropData() const;
+
+	virtual UCropDataAsset* GetCropData_Implementation() const { return nullptr; }
 };

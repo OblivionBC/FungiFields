@@ -6,6 +6,7 @@
 
 class UChestInventoryComponent;
 class UChestWidget;
+class AFungiFieldsCharacter;
 
 /**
  * Actor representing a chest that can be placed and interacted with.
@@ -45,6 +46,9 @@ private:
 	/** Currently open chest widget for this player (client-side) */
 	UPROPERTY()
 	TObjectPtr<UChestWidget> ChestWidgetInstance;
+
+	/** Player who opened the chest (for input-block pop on close). */
+	TWeakObjectPtr<AFungiFieldsCharacter> ChestOpenerCharacter;
 
 	void OpenChestWidgetForPlayer(AActor* Interactor);
 	void CloseChestWidget();

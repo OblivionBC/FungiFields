@@ -75,6 +75,13 @@ public:
 	bool SwapSlots(int32 SlotAIndex, int32 SlotBIndex);
 
 	/**
+	 * Move or merge a stack from this inventory's slot into a specific slot on another inventory.
+	 * If the destination slot holds a different item, stacks are swapped. Respects max stack size.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	bool TransferStackToOtherInventorySlot(UInventoryComponent* Destination, int32 FromSlotIndex, int32 ToSlotIndex);
+
+	/**
 	 * Remove items from a specific slot.
 	 * @param SlotIndex Index of the slot to remove from
 	 * @param Amount Number of items to remove
@@ -159,9 +166,9 @@ private:
 	/**
 	 * Attaches or removes mesh based on equipped item.
 	 */
-	void UpdateEquippedItemActor();
+	void UpdateEquippedItemMesh();
 
 	UPROPERTY()
-	TObjectPtr<AActor> EquippedItemActor;
+	TObjectPtr<UStaticMeshComponent> EquippedItemMeshComponent;
 };
 

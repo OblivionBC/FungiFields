@@ -6,6 +6,6 @@ public class FungiFields : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG", "Slate", "SlateCore", "GameplayAbilities", "GameplayTags", "GameplayTasks", "Niagara" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG", "Slate", "SlateCore", "GameplayAbilities", "GameplayTags", "GameplayTasks", "Niagara", "AIModule", "NavigationSystem" });
 	}
 }

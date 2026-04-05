@@ -42,7 +42,11 @@ void UCropManagerSubsystem::RegisterCrop(UCropGrowthComponent* GrowthComponent)
 		return;
 	}
 
-	RegisteredCrops.Add(GrowthComponent);
+	if (!RegisteredCrops.Contains(GrowthComponent))
+		RegisteredCrops.Add(GrowthComponent);
+
+	GrowthComponent->OnCropFullyGrown.AddDynamic(this, &UCropManagerSubsystem::HandleCropFullyGrown);
+	GrowthComponent->OnCropWithered.AddDynamic(this, &UCropManagerSubsystem::HandleCropWithered);
 }
 
 void UCropManagerSubsystem::UnregisterCrop(UCropGrowthComponent* GrowthComponent)
@@ -53,25 +57,25 @@ void UCropManagerSubsystem::UnregisterCrop(UCropGrowthComponent* GrowthComponent
 	}
 
 	RegisteredCrops.Remove(GrowthComponent);
+
+	GrowthComponent->OnCropFullyGrown.RemoveDynamic(this, &UCropManagerSubsystem::HandleCropFullyGrown);
+	GrowthComponent->OnCropWithered.RemoveDynamic(this, &UCropManagerSubsystem::HandleCropWithered);
 }
 
 void UCropManagerSubsystem::PauseAllGrowth()
 {
-	bGrowthPaused = true;
+	if (UWorld* World = GetWorld())
+		World->GetTimerManager().PauseTimer(GrowthUpdateTimerHandle);
 }
 
 void UCropManagerSubsystem::ResumeAllGrowth()
 {
-	bGrowthPaused = false;
+	if (UWorld* World = GetWorld())
+		World->GetTimerManager().UnPauseTimer(GrowthUpdateTimerHandle);
 }
 
 void UCropManagerSubsystem::OnGrowthUpdateTimer()
 {
-	if (bGrowthPaused)
-	{
-		return;
-	}
-
 	TArray<TObjectPtr<UCropGrowthComponent>> CropsToUpdate(RegisteredCrops.Array());
 
 	for (UCropGrowthComponent* GrowthComponent : CropsToUpdate)
@@ -85,6 +89,16 @@ void UCropManagerSubsystem::OnGrowthUpdateTimer()
 			RegisteredCrops.Remove(GrowthComponent);
 		}
 	}
+}
+
+void UCropManagerSubsystem::HandleCropFullyGrown(AActor* Crop)
+{
+	OnCropFullyGrown.Broadcast(Crop);
+}
+
+void UCropManagerSubsystem::HandleCropWithered(AActor* Crop)
+{
+	OnCropWithered.Broadcast(Crop);
 }
 
 

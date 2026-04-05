@@ -4,25 +4,45 @@
 #include "../Interfaces/InteractableInterface.h"
 #include "../Widgets/InteractionWidget.h"
 #include "Blueprint/UserWidget.h"
-#include "DrawDebugHelpers.h"
-#include "Engine/Engine.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
+
+namespace
+{
+	constexpr int32 InteractionPromptZOrder = 1;
+}
 
 UInteractionComponent::UInteractionComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	PrimaryComponentTick.bCanEverTick = true;
-	PrimaryComponentTick.TickGroup = TG_PrePhysics;
+	PrimaryComponentTick.bCanEverTick = false;
 }
 
 void UInteractionComponent::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			TracePollingTimer,
+			this,
+			&UInteractionComponent::TraceForInteractable,
+			0.0667f,
+			true
+		);
+	}
 }
 
-void UInteractionComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+void UInteractionComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	TraceForInteractable();
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(TracePollingTimer);
+		World->GetTimerManager().ClearTimer(InteractableResetTimer);
+	}
+	ClearInteractable();
+	Super::EndPlay(EndPlayReason);
 }
 
 void UInteractionComponent::SetCamera(UCameraComponent* Camera)
@@ -32,74 +52,50 @@ void UInteractionComponent::SetCamera(UCameraComponent* Camera)
 
 void UInteractionComponent::Interact(const FInputActionValue& Value)
 {
-	if (!CameraComponent)
-	{
-		return;
-	}
-
+	AActor* Owner = GetOwner();
 	UWorld* World = GetWorld();
-	if (!World)
-	{
+	if (!CameraComponent || !World || !Owner)
 		return;
-	}
 
 	FVector Start = CameraComponent->GetComponentLocation();
-	FVector ForwardVector = CameraComponent->GetForwardVector();
-	FVector End = Start + (ForwardVector * TraceDistance);
+	FVector End = Start + (CameraComponent->GetForwardVector() * TraceDistance);
 
 	FHitResult HitResult;
-	FCollisionQueryParams TraceParams(FName(TEXT("InteractTrace")), true, GetOwner());
+	FCollisionQueryParams TraceParams(FName(TEXT("InteractTrace")), true, Owner);
 	TraceParams.bReturnPhysicalMaterial = false;
 	TraceParams.bTraceComplex = true;
 
-	bool bHit = World->LineTraceSingleByChannel(
-		HitResult,
-		Start,
-		End,
-		ECC_Visibility,
-		TraceParams
-	);
-
-	DrawDebugLine(World, Start, End, FColor::Green, false, 2.0f);
-
-	if (bHit && HitResult.GetActor())
+	if (World->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, TraceParams))
 	{
-		AActor* HitActor = HitResult.GetActor();
-		if (HitActor->Implements<UInteractableInterface>())
+		if (AActor* HitActor = HitResult.GetActor())
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Interact with Actor: %s"), *HitActor->GetName());
-			IInteractableInterface::Execute_Interact(HitActor, GetOwner());
-			ClearInteractable();
+			if (HitActor->Implements<UInteractableInterface>())
+			{
+				IInteractableInterface::Execute_Interact(HitActor, Owner);
+				ClearInteractable();
+			}
 		}
 	}
 }
 
 void UInteractionComponent::TraceForInteractable()
 {
-	if (!CameraComponent)
-	{
-		return;
-	}
-
+	AActor* Owner = GetOwner();
 	UWorld* World = GetWorld();
-	if (!World)
-	{
+	if (!CameraComponent || !World || !Owner)
 		return;
-	}
 
 	FVector Start = CameraComponent->GetComponentLocation();
 	FVector End = Start + (CameraComponent->GetForwardVector() * TraceDistance);
 
 	FHitResult HitResult;
-	FCollisionQueryParams Params(FName(TEXT("InteractTrace")), true, GetOwner());
+	FCollisionQueryParams Params(FName(TEXT("InteractTrace")), true, Owner);
 
 	World->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, Params);
 	
 	AActor* HitActor = HitResult.GetActor();
 	if (HitActor && HitActor->Implements<UInteractableInterface>())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Hit Actor: %s"), *HitActor->GetName());
-
 		if (HitActor != LastInteractable)
 		{
 			FText Prompt = IInteractableInterface::Execute_GetInteractionText(HitActor);
@@ -141,21 +137,22 @@ void UInteractionComponent::ClearInteractable()
 
 void UInteractionComponent::ShowInteractionWidget(AActor* Interactable, const FText& Prompt)
 {
-
-	UWorld* World = GetWorld();
-	if (!InteractionWidget && InteractionWidgetClass && World)
+	if (!InteractionWidget && InteractionWidgetClass)
 	{
-		InteractionWidget = CreateWidget<UInteractionWidget>(World, InteractionWidgetClass);
-		if (InteractionWidget)
+		APawn* PawnOwner = Cast<APawn>(GetOwner());
+		APlayerController* PC = PawnOwner ? Cast<APlayerController>(PawnOwner->GetController()) : nullptr;
+		if (PC)
 		{
-			InteractionWidget->AddToViewport();
+			InteractionWidget = CreateWidget<UInteractionWidget>(PC, InteractionWidgetClass);
+			if (InteractionWidget)
+				InteractionWidget->AddToViewport(InteractionPromptZOrder);
 		}
 	}
 
 	if (InteractionWidget)
 	{
 		InteractionWidget->SetPromptText(Prompt);
-		InteractionWidget->SetVisibility(ESlateVisibility::Visible);
+		InteractionWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
 
 	LastInteractable = Interactable;

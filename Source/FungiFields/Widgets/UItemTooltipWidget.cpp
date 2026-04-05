@@ -73,11 +73,11 @@ void UItemTooltipWidget::BuildWidgetStructure()
 
 void UItemTooltipWidget::SetContent(const FText& Name, const FText& Description)
 {
-	BuildWidgetStructure();
-	if (NameText)
-	{
-		NameText->SetText(Name);
-	}
+	if (!NameText)
+		return;
+
+	NameText->SetText(Name);
+
 	if (DescriptionText)
 	{
 		DescriptionText->SetText(Description);

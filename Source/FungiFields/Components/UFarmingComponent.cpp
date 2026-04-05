@@ -6,7 +6,6 @@
 #include "../Data/USeedDataAsset.h"
 #include "../Data/UCropDataAsset.h"
 #include "../Data/UItemDataAsset.h"
-#include "../Actors/ACropBase.h"
 #include "../Interfaces/IFarmableInterface.h"
 #include "../Interfaces/IHarvestableInterface.h"
 #include "../Data/FHarvestResult.h"
@@ -15,38 +14,42 @@
 #include "../Widgets/InteractionWidget.h"
 #include "AbilitySystemInterface.h"
 #include "Engine/World.h"
-#include "DrawDebugHelpers.h"
 #include "Blueprint/UserWidget.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
 
 UFarmingComponent::UFarmingComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	PrimaryComponentTick.bCanEverTick = true;
-	PrimaryComponentTick.TickGroup = TG_PrePhysics;
-	CurrentToolType = EToolType::Hoe;
-	CurrentToolPower = 1.0f;
-	bHasValidTool = false;
-	bHasSeedEquipped = false;
-	EquippedSeedData = nullptr;
-	EquippedSlotIndexCached = INDEX_NONE;
-	LastFarmableTarget = nullptr;
-	LastTooltipText = FText::GetEmpty();
-	FarmingTooltipWidget = nullptr;
-	TooltipTraceDistance = 800.0f;
-	TooltipClearDelay = 3.0f;
+	PrimaryComponentTick.bCanEverTick = false;
 }
 
 void UFarmingComponent::BeginPlay()
 {
 	Super::BeginPlay();
-
 	UpdateEquippedTool();
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			TooltipPollingTimer,
+			this,
+			&UFarmingComponent::TraceForFarmable,
+			0.0667f,
+			true
+		);
+	}
 }
 
-void UFarmingComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+void UFarmingComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	TraceForFarmable();
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(TooltipPollingTimer);
+		World->GetTimerManager().ClearTimer(FarmableResetTimer);
+	}
+	ClearFarmable();
+	Super::EndPlay(EndPlayReason);
 }
 
 void UFarmingComponent::SetCamera(UCameraComponent* Camera)
@@ -57,10 +60,7 @@ void UFarmingComponent::SetCamera(UCameraComponent* Camera)
 void UFarmingComponent::UseEquippedTool(const FInputActionValue& Value)
 {
 	if (!CameraComponent)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("UFarmingComponent::UseEquippedTool: CameraComponent is null!"));
 		return;
-	}
 
 	FHitResult HitResult;
 	if (!PerformToolTrace(HitResult))
@@ -102,33 +102,14 @@ bool UFarmingComponent::ExecuteFarmingAction(AActor* TargetActor, const FVector&
 				{
 					if (ItemData->bIsSoilBag)
 					{
-						UE_LOG(LogTemp, Log, TEXT("UFarmingComponent: Soil bag detected in ExecuteFarmingAction"));
-						if (TargetActor->Implements<UFarmableInterface>())
+						if (TargetActor->Implements<UFarmableInterface>() &&
+							IFarmableInterface::Execute_CanAcceptSoilBag(TargetActor, const_cast<UItemDataAsset*>(ItemData)) &&
+							IFarmableInterface::Execute_AddSoilFromBag(TargetActor, const_cast<UItemDataAsset*>(ItemData)))
 						{
-							UE_LOG(LogTemp, Log, TEXT("UFarmingComponent: Target implements IFarmableInterface"));
-							if (IFarmableInterface::Execute_CanAcceptSoilBag(TargetActor, const_cast<UItemDataAsset*>(ItemData)))
-							{
-								UE_LOG(LogTemp, Log, TEXT("UFarmingComponent: Can accept soil bag"));
-								if (IFarmableInterface::Execute_AddSoilFromBag(TargetActor, const_cast<UItemDataAsset*>(ItemData)))
-								{
-									UE_LOG(LogTemp, Log, TEXT("UFarmingComponent: Soil bag placed successfully"));
-									InventoryComp->ConsumeFromSlot(EquippedSlotIndex, 1);
-									UpdateEquippedTool();
-									return true;
-								}
-								else
-								{
-									UE_LOG(LogTemp, Warning, TEXT("UFarmingComponent: AddSoilFromBag returned false"));
-								}
-							}
-							else
-							{
-								UE_LOG(LogTemp, Warning, TEXT("UFarmingComponent: CanAcceptSoilBag returned false"));
-							}
-						}
-						else
-						{
-							UE_LOG(LogTemp, Warning, TEXT("UFarmingComponent: Target does not implement IFarmableInterface"));
+							InventoryComp->ConsumeFromSlot(EquippedSlotIndex, 1);
+							UpdateEquippedTool();
+							OnFarmingActionPerformed.Broadcast(GetOwner());
+							return true;
 						}
 						return false;
 					}
@@ -148,9 +129,8 @@ bool UFarmingComponent::ExecuteFarmingAction(AActor* TargetActor, const FVector&
 					InventoryComp->ConsumeFromSlot(EquippedSlotIndexCached, 1);
 					UpdateEquippedTool();
 				}
-				
+
 				OnSeedPlanted.Broadcast(GetOwner(), SeedData);
-				
 				return true;
 			}
 		}
@@ -168,38 +148,17 @@ bool UFarmingComponent::ExecuteFarmingAction(AActor* TargetActor, const FVector&
 		
 		if (bSuccess)
 		{
-			if (IAbilitySystemInterface* ASCInterface = Cast<IAbilitySystemInterface>(GetOwner()))
-			{
-				float StaminaCost = 10.0f;
-				
-				UInventoryComponent* InventoryComp = GetOwner()->FindComponentByClass<UInventoryComponent>();
-				if (InventoryComp)
-				{
-					int32 EquippedSlotIndex = InventoryComp->GetEquippedSlot();
-					if (EquippedSlotIndex != INDEX_NONE)
-					{
-						const TArray<FInventorySlot>& Slots = InventoryComp->GetInventorySlots();
-						if (Slots.IsValidIndex(EquippedSlotIndex))
-						{
-							const FInventorySlot& Slot = Slots[EquippedSlotIndex];
-							if (const UToolDataAsset* ToolData = Cast<const UToolDataAsset>(Slot.ItemDefinition))
-							{
-								StaminaCost = ToolData->StaminaCost;
-							}
-						}
-					}
-				}
-				
-				ConsumeStamina(StaminaCost);
-			}
-			
+			ConsumeStamina(ResolveStaminaCost());
+
 			if (ToolType == EToolType::Hoe)
 			{
 				OnSoilTilled.Broadcast(GetOwner());
+				OnFarmingActionPerformed.Broadcast(GetOwner());
 			}
 			else if (ToolType == EToolType::WateringCan)
 			{
 				OnSoilWatered.Broadcast(GetOwner(), TargetActor);
+				OnFarmingActionPerformed.Broadcast(GetOwner());
 			}
 		}
 		
@@ -213,37 +172,10 @@ bool UFarmingComponent::ExecuteFarmingAction(AActor* TargetActor, const FVector&
 			
 			if (HarvestResult.bSuccess)
 			{
-				if (IAbilitySystemInterface* ASCInterface = Cast<IAbilitySystemInterface>(GetOwner()))
-				{
-					float StaminaCost = 10.0f;
-					
-					UInventoryComponent* InventoryComp = GetOwner()->FindComponentByClass<UInventoryComponent>();
-					if (InventoryComp)
-					{
-						int32 EquippedSlotIndex = InventoryComp->GetEquippedSlot();
-						if (EquippedSlotIndex != INDEX_NONE)
-						{
-							const TArray<FInventorySlot>& Slots = InventoryComp->GetInventorySlots();
-							if (Slots.IsValidIndex(EquippedSlotIndex))
-							{
-								const FInventorySlot& Slot = Slots[EquippedSlotIndex];
-								if (const UToolDataAsset* ToolData = Cast<const UToolDataAsset>(Slot.ItemDefinition))
-								{
-									StaminaCost = ToolData->StaminaCost;
-								}
-							}
-						}
-					}
-					
-					ConsumeStamina(StaminaCost);
-				}
-				
-				UCropDataAsset* CropData = nullptr;
-				if (ACropBase* Crop = Cast<ACropBase>(TargetActor))
-				{
-					CropData = Crop->GetCropData();
-				}
-				
+				ConsumeStamina(ResolveStaminaCost());
+
+				UCropDataAsset* CropData = IHarvestableInterface::Execute_GetCropData(TargetActor);
+
 				OnCropHarvested.Broadcast(GetOwner(), CropData, HarvestResult.Quantity);
 			}
 			
@@ -364,30 +296,47 @@ void UFarmingComponent::UpdateEquippedTool()
 
 bool UFarmingComponent::PerformToolTrace(FHitResult& OutHit) const
 {
-	if (!CameraComponent || !GetWorld())
-	{
+	AActor* Owner = GetOwner();
+	if (!CameraComponent || !GetWorld() || !Owner)
 		return false;
-	}
 
 	FVector Start = CameraComponent->GetComponentLocation();
 	FVector ForwardVector = CameraComponent->GetForwardVector();
 	FVector End = Start + (ForwardVector * ToolTraceDistance);
 
-	FCollisionQueryParams TraceParams(FName(TEXT("ToolTrace")), true, GetOwner());
+	FCollisionQueryParams TraceParams(FName(TEXT("ToolTrace")), true, Owner);
 	TraceParams.bReturnPhysicalMaterial = false;
 	TraceParams.bTraceComplex = true;
 
-	bool bHit = GetWorld()->LineTraceSingleByChannel(
+	return GetWorld()->LineTraceSingleByChannel(
 		OutHit,
 		Start,
 		End,
 		ECC_Visibility,
 		TraceParams
 	);
+}
 
-	DrawDebugLine(GetWorld(), Start, End, bHit ? FColor::Green : FColor::Red, false, 2.0f);
+float UFarmingComponent::ResolveStaminaCost() const
+{
+	AActor* Owner = GetOwner();
+	if (!Owner)
+		return 10.0f;
 
-	return bHit;
+	if (UInventoryComponent* InventoryComp = Owner->FindComponentByClass<UInventoryComponent>())
+	{
+		const int32 SlotIndex = InventoryComp->GetEquippedSlot();
+		if (SlotIndex != INDEX_NONE)
+		{
+			const TArray<FInventorySlot>& Slots = InventoryComp->GetInventorySlots();
+			if (Slots.IsValidIndex(SlotIndex))
+			{
+				if (const UToolDataAsset* ToolData = Cast<const UToolDataAsset>(Slots[SlotIndex].ItemDefinition))
+					return ToolData->StaminaCost;
+			}
+		}
+	}
+	return 10.0f;
 }
 
 bool UFarmingComponent::ConsumeStamina(float StaminaCost)
@@ -431,19 +380,13 @@ bool UFarmingComponent::ConsumeStamina(float StaminaCost)
 
 void UFarmingComponent::TraceForFarmable()
 {
-	if (!CameraComponent)
-	{
-		return;
-	}
-
+	AActor* Owner = GetOwner();
 	UWorld* World = GetWorld();
-	if (!World)
-	{
+	if (!CameraComponent || !World || !Owner)
 		return;
-	}
 
 	bool bHasSoilBagEquipped = false;
-	if (UInventoryComponent* InventoryComp = GetOwner()->FindComponentByClass<UInventoryComponent>())
+	if (UInventoryComponent* InventoryComp = Owner->FindComponentByClass<UInventoryComponent>())
 	{
 		const int32 EquippedSlotIndex = InventoryComp->GetEquippedSlot();
 		if (EquippedSlotIndex != INDEX_NONE)
@@ -484,7 +427,7 @@ void UFarmingComponent::TraceForFarmable()
 	FVector End = Start + (CameraComponent->GetForwardVector() * TooltipTraceDistance);
 
 	FHitResult HitResult;
-	FCollisionQueryParams Params(FName(TEXT("FarmingTooltipTrace")), true, GetOwner());
+	FCollisionQueryParams Params(FName(TEXT("FarmingTooltipTrace")), true, Owner);
 
 	World->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, Params);
 	
@@ -512,7 +455,7 @@ void UFarmingComponent::TraceForFarmable()
 	FText TooltipText;
 	bool bShouldShowTooltip = false;
 
-	if (UInventoryComponent* InventoryComp = GetOwner()->FindComponentByClass<UInventoryComponent>())
+	if (UInventoryComponent* InventoryComp = Owner->FindComponentByClass<UInventoryComponent>())
 	{
 		const int32 EquippedSlotIndex = InventoryComp->GetEquippedSlot();
 		if (EquippedSlotIndex != INDEX_NONE)
@@ -521,33 +464,23 @@ void UFarmingComponent::TraceForFarmable()
 			if (Slots.IsValidIndex(EquippedSlotIndex))
 			{
 				const FInventorySlot& Slot = Slots[EquippedSlotIndex];
-				if (const UItemDataAsset* ItemData = Cast<const UItemDataAsset>(Slot.ItemDefinition))
+				if (const UItemDataAsset* ItemData = Slot.ItemDefinition.Get())
 				{
-					if (ItemData->bIsSoilBag)
+					if (ItemData->bIsSoilBag && HitActor->Implements<UFarmableInterface>())
 					{
-						UE_LOG(LogTemp, VeryVerbose, TEXT("UFarmingComponent::TraceForFarmable: Soil bag detected in tooltip trace"));
-						if (HitActor->Implements<UFarmableInterface>())
+						if (IFarmableInterface::Execute_CanAcceptSoilBag(HitActor, const_cast<UItemDataAsset*>(ItemData)))
 						{
-							UE_LOG(LogTemp, VeryVerbose, TEXT("UFarmingComponent::TraceForFarmable: HitActor implements IFarmableInterface"));
-							if (IFarmableInterface::Execute_CanAcceptSoilBag(HitActor, const_cast<UItemDataAsset*>(ItemData)))
-							{
-								UE_LOG(LogTemp, VeryVerbose, TEXT("UFarmingComponent::TraceForFarmable: Can accept soil bag - showing tooltip"));
-								TooltipText = FText::FromString(TEXT("Left Click to Place Soil"));
-								bShouldShowTooltip = true;
-							}
-							else
-							{
-								FText BlockedReason = IFarmableInterface::Execute_GetCannotAcceptSoilBagReason(HitActor);
-								if (!BlockedReason.IsEmpty())
-								{
-									TooltipText = BlockedReason;
-									bShouldShowTooltip = true;
-								}
-							}
+							TooltipText = FText::FromString(TEXT("Left Click to Place Soil"));
+							bShouldShowTooltip = true;
 						}
 						else
 						{
-							UE_LOG(LogTemp, VeryVerbose, TEXT("UFarmingComponent::TraceForFarmable: HitActor does not implement IFarmableInterface"));
+							FText BlockedReason = IFarmableInterface::Execute_GetCannotAcceptSoilBagReason(HitActor);
+							if (!BlockedReason.IsEmpty())
+							{
+								TooltipText = BlockedReason;
+								bShouldShowTooltip = true;
+							}
 						}
 					}
 				}
@@ -575,7 +508,7 @@ void UFarmingComponent::TraceForFarmable()
 	}
 	else if (bHasValidTool && HitActor->Implements<UFarmableInterface>())
 	{
-		if (IFarmableInterface::Execute_CanInteractWithTool(HitActor, CurrentToolType, GetOwner()) && CurrentToolType != EToolType::Scythe)
+		if (IFarmableInterface::Execute_CanInteractWithTool(HitActor, CurrentToolType, Owner) && CurrentToolType != EToolType::Scythe)
 		{
 			FString ActionText;
 			switch (CurrentToolType)
@@ -654,13 +587,15 @@ void UFarmingComponent::TraceForFarmable()
 
 void UFarmingComponent::ShowFarmingTooltip(AActor* Target, const FText& Prompt)
 {
-	UWorld* World = GetWorld();
-	if (!FarmingTooltipWidget && FarmingTooltipWidgetClass && World)
+	if (!FarmingTooltipWidget && FarmingTooltipWidgetClass)
 	{
-		FarmingTooltipWidget = CreateWidget<UUserWidget>(World, FarmingTooltipWidgetClass);
-		if (FarmingTooltipWidget)
+		APawn* PawnOwner = Cast<APawn>(GetOwner());
+		APlayerController* PC = PawnOwner ? Cast<APlayerController>(PawnOwner->GetController()) : nullptr;
+		if (PC)
 		{
-			FarmingTooltipWidget->AddToViewport();
+			FarmingTooltipWidget = CreateWidget<UUserWidget>(PC, FarmingTooltipWidgetClass);
+			if (FarmingTooltipWidget)
+				FarmingTooltipWidget->AddToViewport();
 		}
 	}
 

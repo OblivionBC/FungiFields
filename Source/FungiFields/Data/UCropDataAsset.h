@@ -35,9 +35,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Crop Properties", meta = (ClampMin = "0.0"))
 	float WitherTimeWithoutWater = 30.0f;
 
-	/** Item added to inventory on harvest */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Crop Properties")
-	TSoftObjectPtr<UItemDataAsset> HarvestItem;
+	TObjectPtr<UItemDataAsset> HarvestItem;
 
 	/** Base number of items harvested */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Crop Properties", meta = (ClampMin = "1"))

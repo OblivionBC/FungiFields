@@ -6,11 +6,9 @@
 
 class UCropGrowthComponent;
 
-/**
- * Centralized manager for all crop growth in the world.
- * Uses a single timer to update all crops, improving performance.
- * Follows the Manager Pattern (UWorldSubsystem) as per design guidelines.
- */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCropManagerCropFullyGrown, AActor*, Crop);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCropManagerCropWithered, AActor*, Crop);
+
 UCLASS()
 class FUNGIFIELDS_API UCropManagerSubsystem : public UWorldSubsystem
 {
@@ -35,22 +33,30 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Crop Manager")
 	int32 GetRegisteredCropCount() const { return RegisteredCrops.Num(); }
 
+	const TSet<TObjectPtr<UCropGrowthComponent>>& GetRegisteredCrops() const { return RegisteredCrops; }
+
+	UPROPERTY(BlueprintAssignable, Category = "Crop Manager Events")
+	FOnCropManagerCropFullyGrown OnCropFullyGrown;
+
+	UPROPERTY(BlueprintAssignable, Category = "Crop Manager Events")
+	FOnCropManagerCropWithered OnCropWithered;
+
 protected:
 	UFUNCTION()
 	void OnGrowthUpdateTimer();
 
 private:
-	/** Set of all registered crop growth components */
+	UFUNCTION()
+	void HandleCropFullyGrown(AActor* Crop);
+
+	UFUNCTION()
+	void HandleCropWithered(AActor* Crop);
+
 	UPROPERTY()
 	TSet<TObjectPtr<UCropGrowthComponent>> RegisteredCrops;
 
-	/** Timer handle for the global growth update */
 	FTimerHandle GrowthUpdateTimerHandle;
 
-	/** Interval for growth updates (seconds) */
 	UPROPERTY(EditDefaultsOnly, Category = "Crop Manager Settings", meta = (ClampMin = "0.1"))
 	float GrowthUpdateInterval = 1.0f;
-
-	/** Whether growth is currently paused */
-	bool bGrowthPaused = false;
 };

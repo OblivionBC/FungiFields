@@ -1,23 +1,33 @@
 #include "QuestEntryWidget.h"
 #include "Components/TextBlock.h"
-#include "FungiFields/Data/Quest.h"
+#include "FungiFields/ENUM/QuestState.h"
 
-void UQuestEntryWidget::Setup(UQuest* InQuest)
+void UQuestEntryWidget::Setup(const UQuest* QuestDef, const FQuestProgress& Progress)
 {
-	Quest = InQuest;
-
-	if (!Quest)
+	if (!QuestDef)
 		return;
 
 	if (QuestNameText)
-		QuestNameText->SetText(FText::FromName(Quest->QuestName));
+		QuestNameText->SetText(FText::FromName(QuestDef->QuestName));
 
 	if (ProgressText)
 	{
-		FString ProgressStr = FString::Printf(TEXT("%d / %d"),
-			Quest->CurrentProgress,
-			Quest->RequiredProgress
-		);
-		ProgressText->SetText(FText::FromString(ProgressStr));
+		ProgressText->SetText(FText::FromString(
+			FString::Printf(TEXT("%d / %d"), Progress.CurrentProgress, QuestDef->RequiredProgress)
+		));
+	}
+
+	if (StateText)
+	{
+		FString StateStr;
+		switch (Progress.State)
+		{
+		case EQuestState::NotStarted: StateStr = TEXT("Not Started"); break;
+		case EQuestState::InProgress: StateStr = TEXT("In Progress"); break;
+		case EQuestState::Completed:  StateStr = TEXT("Completed");   break;
+		case EQuestState::Failed:     StateStr = TEXT("Failed");      break;
+		default:                      StateStr = TEXT("Unknown");     break;
+		}
+		StateText->SetText(FText::FromString(StateStr));
 	}
 }

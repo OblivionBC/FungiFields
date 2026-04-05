@@ -12,7 +12,11 @@ ULevelComponent::ULevelComponent()
 void ULevelComponent::BeginPlay()
 {
 	Super::BeginPlay();
-	if (UAbilitySystemComponent * AbilitySystemComponent = GetOwner()->FindComponentByClass<UAbilitySystemComponent>())
+	AActor* Owner = GetOwner();
+	if (!Owner)
+		return;
+
+	if (UAbilitySystemComponent* AbilitySystemComponent = Owner->FindComponentByClass<UAbilitySystemComponent>())
 	{
 		this->ASC = AbilitySystemComponent;
 		LevelAttributeSet = AbilitySystemComponent->GetSet<ULevelAttributeSet>();
@@ -49,7 +53,7 @@ void ULevelComponent::BindDelegates()
 			.AddUObject(this, &ULevelComponent::CheckLevelUp);
 }
 
-void ULevelComponent::CheckLevelUp(const FOnAttributeChangeData& Data) const
+void ULevelComponent::CheckLevelUp(const FOnAttributeChangeData& Data)
 {
 	if (!LevelAttributeSet || !ASC)
 	{
@@ -72,7 +76,7 @@ void ULevelComponent::CheckLevelUp(const FOnAttributeChangeData& Data) const
 	}
 }
 
-void ULevelComponent::LevelUp(int Levels) const
+void ULevelComponent::LevelUp(int Levels)
 {
 	ASC->ApplyModToAttribute(
 		ULevelAttributeSet::GetLevelAttribute(),
@@ -81,7 +85,7 @@ void ULevelComponent::LevelUp(int Levels) const
 	);
 }
 
-void ULevelComponent::LowerByMaxXP(int MaxXP) const
+void ULevelComponent::LowerByMaxXP(int MaxXP)
 {
 	ASC->ApplyModToAttribute(
 		ULevelAttributeSet::GetXPAttribute(),

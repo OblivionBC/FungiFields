@@ -2,12 +2,15 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
-class UQuest;
+#include "FungiFields/Data/Quest.h"
+#include "QuestComponent.generated.h"
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnQuestsUpdated);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnQuestCompleted, UQuest*, QuestDef, FQuestProgress, Progress);
+
 class UCropDataAsset;
 class USeedDataAsset;
 class UItemDataAsset;
-#include "QuestComponent.generated.h"
-
 class AActor;
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
@@ -24,64 +27,66 @@ protected:
 
 public:
 	UFUNCTION(BlueprintCallable)
-	UQuest* AddQuest(UQuest* QuestClass);
+	UQuest* AddQuest(UQuest* Quest);
 
 	UFUNCTION(BlueprintCallable)
-	TArray<UQuest*> GetAllQuests() const;
+	TArray<UQuest*> GetAllQuestDefinitions() const;
+
+	void ForEachQuestDefinition(TFunctionRef<void(const UQuest*)> Callback) const;
+
+	UFUNCTION(BlueprintCallable)
+	bool GetQuestProgressForID(FName QuestID, FQuestProgress& OutProgress) const;
 
 	UFUNCTION(BlueprintCallable)
 	bool RemoveQuest(FName QuestID);
 
-	/**
-	 * Subscribe to component events from owner's components.
-	 * Called automatically in BeginPlay.
-	 */
+	UPROPERTY(BlueprintAssignable, Category = "Quest Events")
+	FOnQuestsUpdated OnQuestsUpdated;
+
+	UPROPERTY(BlueprintAssignable, Category = "Quest Events")
+	FOnQuestCompleted OnQuestCompleted;
+
 	UFUNCTION(BlueprintCallable, Category = "Quest Events")
 	void SubscribeToComponentEvents();
 
-	/**
-	 * Unsubscribe from component events.
-	 * Called automatically in EndPlay.
-	 */
 	UFUNCTION(BlueprintCallable, Category = "Quest Events")
 	void UnsubscribeFromComponentEvents();
 
 private:
-	/**
-	 * Event handler for crop harvested events.
-	 * Iterates through active quests and updates progress if applicable.
-	 */
 	UFUNCTION()
 	void OnCropHarvested(AActor* Harvester, UCropDataAsset* CropData, int32 Quantity);
 
-	/**
-	 * Event handler for seed planted events.
-	 * Iterates through active quests and updates progress if applicable.
-	 */
+	UFUNCTION()
+	void OnCropFullyGrown(AActor* Crop);
+
+	UFUNCTION()
+	void OnCropWithered(AActor* Crop);
+
 	UFUNCTION()
 	void OnSeedPlanted(AActor* Planter, USeedDataAsset* SeedData);
 
-	/**
-	 * Event handler for soil tilled events.
-	 * Iterates through active quests and updates progress if applicable.
-	 */
 	UFUNCTION()
 	void OnSoilTilled(AActor* Tiller);
 
-	/**
-	 * Event handler for soil watered events.
-	 * Iterates through active quests and updates progress if applicable.
-	 */
 	UFUNCTION()
 	void OnSoilWatered(AActor* Waterer, AActor* SoilPlot);
 
-	/**
-	 * Event handler for item added events from InventoryComponent.
-	 * Iterates through active quests and updates progress if applicable.
-	 */
 	UFUNCTION()
 	void OnItemAdded(UItemDataAsset* Item, int32 Amount, int32 NewTotal);
 
+	UFUNCTION()
+	void OnItemRemoved(UItemDataAsset* Item, int32 Amount, int32 NewTotal);
+
+	UFUNCTION()
+	void OnFarmingActionPerformed(AActor* Performer);
+
+	bool AdvanceMatchingQuests(TFunction<bool(const UQuest*)> ShouldAdvance, int32 Amount);
+	void TryAdvanceAndNotify(TFunction<bool(const UQuest*)> ShouldAdvance, int32 Amount);
+	void DispatchQuestRewards(const UQuest* QuestDef, const FQuestProgress& Progress);
+
 	UPROPERTY()
-	TMap<FName, UQuest*> ActiveQuests;
+	TMap<FName, TObjectPtr<UQuest>> QuestDefinitions;
+
+	UPROPERTY()
+	TMap<FName, FQuestProgress> QuestProgress;
 };

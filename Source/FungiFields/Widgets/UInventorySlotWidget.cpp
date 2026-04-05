@@ -7,11 +7,9 @@
 #include "../Data/UItemDataAsset.h"
 #include "Engine/Texture2D.h"
 #include "Blueprint/DragDropOperation.h"
-#include "Slate/SlateBrushAsset.h"
 #include "Components/UniformGridPanel.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
-#include "Components/SizeBox.h"
 #include "Blueprint/WidgetTree.h"
 
 UInventorySlotWidget::UInventorySlotWidget(const FObjectInitializer& ObjectInitializer)
@@ -257,46 +255,6 @@ FReply UInventorySlotWidget::NativeOnMouseButtonDown(const FGeometry& MyGeometry
 	return FReply::Unhandled();
 }
 
-void UInventorySlotWidget::EnsureDragVisualCreated()
-{
-	if (CachedDragVisual && CachedDragSizeBox)
-	{
-		return;
-	}
-
-	if (!GetWorld())
-	{
-		return;
-	}
-
-	CachedDragSizeBox = NewObject<USizeBox>(GetWorld());
-	if (!CachedDragSizeBox)
-	{
-		return;
-	}
-
-	CachedDragVisual = NewObject<UBorder>(GetWorld());
-	if (!CachedDragVisual)
-	{
-		return;
-	}
-
-	FSlateBrush DefaultBrush;
-	DefaultBrush.DrawAs = ESlateBrushDrawType::Box;
-	DefaultBrush.Margin = FMargin(2.0f);
-	DefaultBrush.TintColor = FSlateColor(FLinearColor(0.3f, 0.3f, 0.3f, 1.0f));
-	CachedDragVisual->SetBrush(DefaultBrush);
-	CachedDragVisual->SetPadding(FMargin(2.0f));
-
-	CachedDragIcon = NewObject<UImage>(GetWorld());
-	if (CachedDragIcon)
-	{
-		CachedDragVisual->AddChild(CachedDragIcon);
-	}
-
-	CachedDragSizeBox->AddChild(CachedDragVisual);
-}
-
 void UInventorySlotWidget::NativeOnDragDetected(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent, UDragDropOperation*& OutOperation)
 {
 	if (CurrentSlotData.IsEmpty())
@@ -304,52 +262,23 @@ void UInventorySlotWidget::NativeOnDragDetected(const FGeometry& MyGeometry, con
 		return;
 	}
 
-	UInventoryDragDropOperation* DragOperation = NewObject<UInventoryDragDropOperation>(GetWorld());
-	if (DragOperation)
+	// UDragDropOperation needs a widget that was constructed through normal UMG paths (e.g. CreateWidget
+	// or a slot in a widget tree). NewObject<USizeBox/UImage>(GetWorld()) produces objects without a valid
+	// Slate representation and crashes inside the drag-drop code when it builds the drag preview.
+	UInventoryDragDropOperation* DragOperation = NewObject<UInventoryDragDropOperation>(this);
+	if (!DragOperation)
 	{
-		DragOperation->SourceSlotIndex = SlotIndex;
-		DragOperation->SourceInventoryID = InventorySourceID;
-		DragOperation->SlotData = CurrentSlotData;
-		
-		if (SlotBorder)
-		{
-			EnsureDragVisualCreated();
-			
-			if (CachedDragSizeBox && CachedDragVisual)
-			{
-				FVector2D SlotSize = MyGeometry.GetLocalSize();
-
-				CachedDragSizeBox->SetWidthOverride(SlotSize.X);
-				CachedDragSizeBox->SetHeightOverride(SlotSize.Y);
-
-				CachedDragVisual->SetBrushColor(SlotBorder->GetBrushColor());
-				
-				if (CachedDragIcon && CurrentSlotData.ItemDefinition && CurrentSlotData.ItemDefinition->ItemIcon)
-				{
-					CachedDragIcon->SetBrushFromTexture(CurrentSlotData.ItemDefinition->ItemIcon, true);
-					CachedDragIcon->SetVisibility(ESlateVisibility::Visible);
-				}
-				else if (CachedDragIcon)
-				{
-					CachedDragIcon->SetVisibility(ESlateVisibility::Collapsed);
-				}
-				
-				DragOperation->DefaultDragVisual = CachedDragSizeBox;
-			}
-			else
-			{
-				DragOperation->DefaultDragVisual = SlotBorder;
-			}
-		}
-		else
-		{
-			DragOperation->DefaultDragVisual = this;
-		}
-		DragOperation->Pivot = EDragPivot::MouseDown;
-		
-		OnDragStarted.Broadcast(SlotIndex, InventorySourceID, CurrentSlotData);
-		OutOperation = DragOperation;
+		return;
 	}
+
+	DragOperation->SourceSlotIndex = SlotIndex;
+	DragOperation->SourceInventoryID = InventorySourceID;
+	DragOperation->SlotData = CurrentSlotData;
+	DragOperation->DefaultDragVisual = this;
+	DragOperation->Pivot = EDragPivot::MouseDown;
+
+	OnDragStarted.Broadcast(SlotIndex, InventorySourceID, CurrentSlotData);
+	OutOperation = DragOperation;
 }
 
 bool UInventorySlotWidget::NativeOnDragOver(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)

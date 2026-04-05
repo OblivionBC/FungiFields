@@ -189,7 +189,17 @@ public:
 public:
 	AFungiFieldsCharacter();
 
+	/** Call when opening a UI that should freeze movement and camera; pair with PopGameplayMenuInputBlock. */
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void PushGameplayMenuInputBlock();
+
+	/** Call when closing such a UI. */
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void PopGameplayMenuInputBlock();
+
 protected:
+	virtual void Jump() override;
+
 	/** Called for movement input */
 	void Move(const FInputActionValue& Value);
 
@@ -233,6 +243,11 @@ private:
 	 * @return Matching ItemDataAsset, or nullptr if not found
 	 */
 	class UItemDataAsset* FindItemDataAssetByContainerData(class USoilContainerDataAsset* ContainerData) const;
+
+	/** Ref-counted block for move/look/jump while a modal menu is open. */
+	int32 GameplayMenuInputBlockCount = 0;
+
+	void RefreshGameplayMenuInputBlock();
 
 	// APawn interface
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;

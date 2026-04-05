@@ -8,7 +8,6 @@
 class UImage;
 class UTextBlock;
 class UBorder;
-class USizeBox;
 class UItemDataAsset;
 class UItemTooltipWidget;
 
@@ -85,11 +84,5 @@ private:
 	bool bIsEquipped = false;
 	bool bIsDragTarget = false;
 
-	TObjectPtr<UBorder> CachedDragVisual;
-	TObjectPtr<UImage> CachedDragIcon;
-	TObjectPtr<class USizeBox> CachedDragSizeBox;
-
 	TObjectPtr<UItemTooltipWidget> CachedItemTooltip;
-
-	void EnsureDragVisualCreated();
 };

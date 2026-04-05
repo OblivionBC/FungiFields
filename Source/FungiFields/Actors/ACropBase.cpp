@@ -100,17 +100,13 @@ FHarvestResult ACropBase::Harvest_Implementation(AActor* Harvester, float ToolPo
 				}
 			}
 
-			if (CropDataAsset->HarvestItem.IsValid())
+			if (UItemDataAsset* HarvestItem = CropDataAsset->HarvestItem)
 			{
-				UItemDataAsset* HarvestItem = CropDataAsset->HarvestItem.LoadSynchronous();
-				if (HarvestItem)
-				{
-					Result.HarvestItem = HarvestItem;
-					Result.Quantity = FinalQuantity;
-					Result.bSuccess = true;
+				Result.HarvestItem = HarvestItem;
+				Result.Quantity = FinalQuantity;
+				Result.bSuccess = true;
 
-					SpawnHarvestItems(HarvestItem, FinalQuantity);
-				}
+				SpawnHarvestItems(HarvestItem, FinalQuantity);
 			}
 
 			if (CropDataAsset && GetWorld())

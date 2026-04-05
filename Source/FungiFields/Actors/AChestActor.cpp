@@ -3,7 +3,11 @@
 #include "../Widgets/UChestWidget.h"
 #include "../Characters/FungiFieldsCharacter.h"
 #include "GameFramework/PlayerController.h"
-#include "Kismet/GameplayStatics.h"
+
+namespace
+{
+	constexpr int32 ChestMenuZOrder = 10000;
+}
 
 AChestActor::AChestActor()
 {
@@ -68,13 +72,19 @@ void AChestActor::OpenChestWidgetForPlayer(AActor* Interactor)
 	if (!ChestWidgetInstance)
 	{
 		ChestWidgetInstance = CreateWidget<UChestWidget>(World, ChestWidgetClass);
+		if (ChestWidgetInstance)
+		{
+			ChestWidgetInstance->OnChestWidgetClosed.AddDynamic(this, &AChestActor::OnChestWidgetClosed);
+		}
 	}
 
 	if (ChestWidgetInstance)
 	{
+		ChestOpenerCharacter = PlayerCharacter;
+		PlayerCharacter->PushGameplayMenuInputBlock();
+
 		ChestWidgetInstance->SetupInventories(PlayerCharacter->InventoryComponent, ChestInventoryComponent);
-		ChestWidgetInstance->OnChestWidgetClosed.AddDynamic(this, &AChestActor::OnChestWidgetClosed);
-		ChestWidgetInstance->AddToViewport();
+		ChestWidgetInstance->AddToViewport(ChestMenuZOrder);
 
 		if (APlayerController* PC = Cast<APlayerController>(PlayerCharacter->GetController()))
 		{
@@ -88,6 +98,11 @@ void AChestActor::OpenChestWidgetForPlayer(AActor* Interactor)
 
 void AChestActor::OnChestWidgetClosed()
 {
+	if (ChestOpenerCharacter.IsValid())
+	{
+		ChestOpenerCharacter->PopGameplayMenuInputBlock();
+	}
+	ChestOpenerCharacter = nullptr;
 	ChestWidgetInstance = nullptr;
 	
 	if (UWorld* World = GetWorld())
