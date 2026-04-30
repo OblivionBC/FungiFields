@@ -9,10 +9,13 @@
 class UFarmingComponent;
 class UFarmerTargetingComponent;
 class AFarmerVillagerCharacter;
+class UToolDataAsset;
+class USeedDataAsset;
 
 /**
  * Timer-driven controller for autonomous farming tasks.
- * Implements the first vertical slice role: Harvester.
+ * Supports Harvester, Planter, and Waterer roles.
+ * Requires physical tools and seeds in the villager's UInventoryComponent to operate.
  */
 UCLASS()
 class FUNGIFIELDS_API AFarmerAIController : public AAIController
@@ -26,11 +29,17 @@ public:
 	virtual void OnUnPossess() override;
 	virtual void OnMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result) override;
 
+	/** Called by AFarmerVillagerCharacter::SetAssignedRole to restart the brain loop cleanly. */
+	void ResetToIdle();
+
 protected:
 	void TickBrain();
-	void AcquireHarvestTarget();
 	void AcquireTargetForRole();
+	void AcquireHarvestTarget();
+	void AcquirePlantTarget();
+	void AcquireWaterTarget();
 	void ProcessCurrentTarget();
+	void BeginWander();
 	void BeginCooldown();
 	void HandleCooldownFinished();
 	void ClearCurrentTarget();
@@ -42,20 +51,16 @@ protected:
 	bool IsDebugEnabled() const;
 	void LogDebug(const FString& Message, ELogVerbosity::Type Verbosity = ELogVerbosity::Log) const;
 
-	/** Main AI polling interval for this role loop. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Harvester", meta = (ClampMin = "0.05"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Farmer", meta = (ClampMin = "0.05"))
 	float BrainTickInterval = 0.5f;
 
-	/** Cooldown after each harvest attempt to prevent spam and allow retargeting. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Harvester", meta = (ClampMin = "0.05"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Farmer", meta = (ClampMin = "0.05"))
 	float ActionCooldownSeconds = 0.4f;
 
-	/** Extra move acceptance distance added to the target interaction range. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Harvester", meta = (ClampMin = "0.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Farmer", meta = (ClampMin = "0.0"))
 	float MoveAcceptanceBuffer = 15.0f;
 
-	/** Fallback interaction range if target does not provide one. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Harvester", meta = (ClampMin = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Farmer", meta = (ClampMin = "1.0"))
 	float FallbackInteractionRange = 100.0f;
 
 private:
@@ -71,8 +76,17 @@ private:
 	UPROPERTY()
 	TObjectPtr<AFarmerVillagerCharacter> CachedVillager;
 
+	UPROPERTY()
+	TObjectPtr<UToolDataAsset> CachedToolData;
+
+	UPROPERTY()
+	TObjectPtr<USeedDataAsset> CachedSeedData;
+
+	int32 CachedSeedSlotIndex = INDEX_NONE;
+
 	FTimerHandle BrainTimerHandle;
 	FTimerHandle CooldownTimerHandle;
+	FTimerHandle WanderCooldownTimer;
 
 	EFarmerJobState JobState = EFarmerJobState::Idle;
 };

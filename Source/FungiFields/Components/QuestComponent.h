@@ -40,6 +40,14 @@ public:
 	UFUNCTION(BlueprintCallable)
 	bool RemoveQuest(FName QuestID);
 
+	/**
+	 * Collects the reward for a quest in the ReadyToCollect state.
+	 * Transitions the quest to Completed, dispatches rewards, and fires OnQuestCompleted.
+	 * @return True if the quest was collected.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Quest")
+	bool CollectQuestReward(FName QuestID);
+
 	UPROPERTY(BlueprintAssignable, Category = "Quest Events")
 	FOnQuestsUpdated OnQuestsUpdated;
 

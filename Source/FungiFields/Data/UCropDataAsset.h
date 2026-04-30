@@ -54,6 +54,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Crop Visuals")
 	UStaticMesh* WitheredMesh;
 
+	/** If true, this crop continues growing during nighttime (e.g. mushrooms). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Crop Properties")
+	bool bGrowsAtNight = false;
+
 	/** Particle effect to spawn when harvesting this crop (Niagara) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Crop Visuals")
 	TObjectPtr<UNiagaraSystem> HarvestParticleEffect;

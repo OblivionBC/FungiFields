@@ -1,5 +1,6 @@
 #include "UCropManagerSubsystem.h"
 #include "../Components/UCropGrowthComponent.h"
+#include "../Data/UCropDataAsset.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
 
@@ -74,20 +75,49 @@ void UCropManagerSubsystem::ResumeAllGrowth()
 		World->GetTimerManager().UnPauseTimer(GrowthUpdateTimerHandle);
 }
 
+void UCropManagerSubsystem::PauseNonNightCrops()
+{
+	NightPausedCrops.Empty();
+
+	for (UCropGrowthComponent* GrowthComponent : RegisteredCrops)
+	{
+		if (!IsValid(GrowthComponent))
+		{
+			continue;
+		}
+
+		UCropDataAsset* CropData = GrowthComponent->GetCropData();
+		if (!CropData || !CropData->bGrowsAtNight)
+		{
+			NightPausedCrops.Add(GrowthComponent);
+		}
+	}
+}
+
+void UCropManagerSubsystem::ResumeNonNightCrops()
+{
+	NightPausedCrops.Empty();
+}
+
 void UCropManagerSubsystem::OnGrowthUpdateTimer()
 {
 	TArray<TObjectPtr<UCropGrowthComponent>> CropsToUpdate(RegisteredCrops.Array());
 
 	for (UCropGrowthComponent* GrowthComponent : CropsToUpdate)
 	{
-		if (IsValid(GrowthComponent))
-		{
-			GrowthComponent->UpdateGrowth(GrowthUpdateInterval);
-		}
-		else
+		if (!IsValid(GrowthComponent))
 		{
 			RegisteredCrops.Remove(GrowthComponent);
+			NightPausedCrops.Remove(GrowthComponent);
+			continue;
 		}
+
+		if (NightPausedCrops.Contains(GrowthComponent))
+		{
+			continue;
+		}
+
+		GrowthComponent->UpdateGrowth(GrowthUpdateInterval);
 	}
 }
 

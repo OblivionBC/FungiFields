@@ -64,6 +64,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rewards")
 	int32 RewardItemQuantity = 1;
 
+	/** Quest description shown in the journal UI. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Quest")
+	FText QuestDescription;
+
+	/** Next quest in the chain. Automatically added to the player when this quest is collected. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Quest Chain")
+	TObjectPtr<UQuest> NextQuest;
+
+	/** All of these quests must be Completed before this quest can be offered or auto-started. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Quest Prerequisites")
+	TArray<TObjectPtr<UQuest>> PrerequisiteQuests;
+
 	bool ShouldRespondToItemAdded(UItemDataAsset* Item, int32 Quantity) const;
 	bool ShouldRespondToItemRemoved(UItemDataAsset* Item, int32 Quantity) const;
 	bool ShouldRespondToCropHarvested(UCropDataAsset* CropData, int32 Quantity) const;

@@ -30,6 +30,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Crop Manager")
 	void ResumeAllGrowth();
 
+	/**
+	 * Pauses only crops that do NOT have bGrowsAtNight set.
+	 * Night-growing crops (e.g. mushrooms) continue updating.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Crop Manager")
+	void PauseNonNightCrops();
+
+	/** Resumes all crops that were selectively paused by PauseNonNightCrops. */
+	UFUNCTION(BlueprintCallable, Category = "Crop Manager")
+	void ResumeNonNightCrops();
+
 	UFUNCTION(BlueprintPure, Category = "Crop Manager")
 	int32 GetRegisteredCropCount() const { return RegisteredCrops.Num(); }
 
@@ -54,6 +65,10 @@ private:
 
 	UPROPERTY()
 	TSet<TObjectPtr<UCropGrowthComponent>> RegisteredCrops;
+
+	/** Crops temporarily excluded from growth updates during nighttime. */
+	UPROPERTY()
+	TSet<TObjectPtr<UCropGrowthComponent>> NightPausedCrops;
 
 	FTimerHandle GrowthUpdateTimerHandle;
 

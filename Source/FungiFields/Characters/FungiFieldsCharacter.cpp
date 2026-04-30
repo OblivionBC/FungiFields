@@ -168,6 +168,18 @@ void AFungiFieldsCharacter::BeginPlay()
 				BackpackWidget->OnBackpackClosed.AddDynamic(this, &AFungiFieldsCharacter::OnBackpackClosed);
 			}
 		}
+
+		if (SporeJournalClass)
+		{
+			SporeJournalWidget = CreateWidget<USporeJournalWidget>(GetWorld(), SporeJournalClass);
+			if (SporeJournalWidget)
+			{
+				SporeJournalWidget->SetOwningPlayer(PC);
+				SporeJournalWidget->AddToViewport(ModalMenuZOrder);
+				SporeJournalWidget->SetVisibility(ESlateVisibility::Hidden);
+				SporeJournalWidget->OnSporeJournalClosed.AddDynamic(this, &AFungiFieldsCharacter::OnSporeJournalClosed);
+			}
+		}
 	}
 
 	if (FollowCamera)
@@ -234,8 +246,8 @@ void AFungiFieldsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 		}
 		
 		EnhancedInputComponent->BindAction(ToggleQuestAction, ETriggerEvent::Started, this, &AFungiFieldsCharacter::ToggleQuestMenu);
-
 		EnhancedInputComponent->BindAction(ToggleBackpackAction, ETriggerEvent::Started, this, &AFungiFieldsCharacter::ToggleBackpack);
+		EnhancedInputComponent->BindAction(ToggleSporeJournalAction, ETriggerEvent::Started, this, &AFungiFieldsCharacter::ToggleSporeJournal);
 
 		if (InventoryComponent)
 		{
@@ -427,6 +439,64 @@ void AFungiFieldsCharacter::OnQuestMenuClosed()
 
 	QuestMenuWidget->SetVisibility(ESlateVisibility::Hidden);
 	bQuestMenuVisible = false;
+
+	PopGameplayMenuInputBlock();
+	FInputModeGameOnly Mode;
+	PC->SetInputMode(Mode);
+	PC->bShowMouseCursor = false;
+}
+
+void AFungiFieldsCharacter::ToggleSporeJournal(const FInputActionValue& Value)
+{
+	if (!SporeJournalWidget) 
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SporeJournalWidget not set!"));
+		return;
+	}
+
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC)
+		return;
+
+	if (!bSporeJournalVisible)
+	{
+		PushGameplayMenuInputBlock();
+		
+		if (!SporeJournalWidget->IsInViewport())
+		{
+			BackpackWidget->AddToViewport(ModalMenuZOrder);
+		}
+		
+		SporeJournalWidget->SetVisibility(ESlateVisibility::Visible);
+		bSporeJournalVisible = true;
+
+		FInputModeUIOnly Mode;
+		Mode.SetWidgetToFocus(SporeJournalWidget->TakeWidget());
+		PC->SetInputMode(Mode);
+		PC->bShowMouseCursor = true;
+	}
+	else
+	{
+		SporeJournalWidget->SetVisibility(ESlateVisibility::Hidden);
+		bSporeJournalVisible = false;
+		PopGameplayMenuInputBlock();
+		FInputModeGameOnly Mode;
+		PC->SetInputMode(Mode);
+		PC->bShowMouseCursor = false;
+	}
+}
+
+void AFungiFieldsCharacter::OnSporeJournalClosed()
+{
+	if (!SporeJournalWidget)
+		return;
+
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC)
+		return;
+
+	SporeJournalWidget->SetVisibility(ESlateVisibility::Hidden);
+	bSporeJournalVisible = false;
 
 	PopGameplayMenuInputBlock();
 	FInputModeGameOnly Mode;

@@ -115,6 +115,22 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Placement Settings", meta = (ClampMin = "1.0"))
 	float RotationAdjustmentStep = 15.0f;
 
+	/** If true, placement snaps to a world-aligned grid of GridSize units. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Placement Settings|Grid")
+	bool bSnapToGrid = false;
+
+	/** World-space grid cell size used when bSnapToGrid is true. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Placement Settings|Grid", meta = (ClampMin = "1.0", EditCondition = "bSnapToGrid"))
+	float GridSize = 100.0f;
+
+	/** If true, allows stacking placeable actors directly on top of existing ones (vertical only). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Placement Settings|Stacking")
+	bool bAllowVerticalStacking = false;
+
+	/** Maximum number of actors that can be stacked vertically at a single XY position. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Placement Settings|Stacking", meta = (ClampMin = "1", EditCondition = "bAllowVerticalStacking"))
+	int32 MaxStackHeight = 3;
+
 private:
 	/** Camera component for line traces */
 	UPROPERTY()
@@ -155,6 +171,11 @@ private:
 	/** Current rotation offset (adjusted by scroll wheel) */
 	UPROPERTY(VisibleAnywhere, Category = "Placement Data")
 	float CurrentRotationOffset = 0.0f;
+
+	FVector SnapToGrid(const FVector& Location) const;
+	bool FindStackTop(const FVector& BaseLocation, FVector& OutStackTop) const;
+	int32 CountStackAt(const FVector& XYLocation) const;
+	bool IsFarmPlotItem() const;
 
 	/** Cached bottom offset for the current preview actor (reused for placement) */
 	UPROPERTY(VisibleAnywhere, Category = "Placement Data")

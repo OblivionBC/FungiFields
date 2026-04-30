@@ -1,6 +1,7 @@
 #include "ASoilPlot.h"
 #include "../Components/USoilComponent.h"
 #include "../Components/InventoryComponent.h"
+#include "../Subsystems/USoilManagerSubsystem.h"
 #include "../Inventory/FInventorySlot.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SceneComponent.h"
@@ -55,6 +56,27 @@ void ASoilPlot::BeginPlay()
 	{
 		Initialize(SoilDataAsset);
 	}
+
+	if (UWorld* World = GetWorld())
+	{
+		if (USoilManagerSubsystem* SoilManager = World->GetSubsystem<USoilManagerSubsystem>())
+		{
+			SoilManager->RegisterSoilPlot(this);
+		}
+	}
+}
+
+void ASoilPlot::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (UWorld* World = GetWorld())
+	{
+		if (USoilManagerSubsystem* SoilManager = World->GetSubsystem<USoilManagerSubsystem>())
+		{
+			SoilManager->UnregisterSoilPlot(this);
+		}
+	}
+
+	Super::EndPlay(EndPlayReason);
 }
 
 void ASoilPlot::Initialize(USoilContainerDataAsset* InContainerData, USoilDataAsset* InSoilData)

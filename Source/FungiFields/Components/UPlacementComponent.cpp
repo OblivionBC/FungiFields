@@ -1,10 +1,12 @@
 #include "UPlacementComponent.h"
 #include "Camera/CameraComponent.h"
 #include "../Data/UItemDataAsset.h"
+#include "../ENUM/EBuildCategory.h"
 #include "../Data/USoilDataAsset.h"
 #include "../Data/USoilContainerDataAsset.h"
 #include "../Actors/ASoilPlot.h"
 #include "../Components/InventoryComponent.h"
+#include "../Subsystems/USoilManagerSubsystem.h"
 #include "../Widgets/InteractionWidget.h"
 #include "Engine/World.h"
 #include "Engine/OverlapResult.h"
@@ -77,7 +79,25 @@ void UPlacementComponent::EnterPlacementMode(UItemDataAsset* PlaceableItem)
 	CurrentPlaceableItem = PlaceableItem;
 	bIsInPlacementMode = true;
 	CurrentRotationOffset = 0.0f;
-	
+
+	switch (PlaceableItem->BuildCategory)
+	{
+	case EBuildCategory::FarmPlot:
+		bSnapToGrid = true;
+		bAllowVerticalStacking = true;
+		break;
+	case EBuildCategory::Structure:
+		bSnapToGrid = true;
+		bAllowVerticalStacking = false;
+		break;
+	case EBuildCategory::Decoration:
+		bSnapToGrid = false;
+		bAllowVerticalStacking = false;
+		break;
+	default:
+		break;
+	}
+
 	UpdatePreviewActor();
 	UpdatePreview();
 	ShowPlacementInstructions();
@@ -195,7 +215,21 @@ void UPlacementComponent::UpdatePreview()
 
 	FVector HitLocation = HitResult.Location;
 	FVector HitNormal = HitResult.Normal;
-	
+
+	if (bSnapToGrid)
+	{
+		HitLocation = SnapToGrid(HitLocation);
+	}
+
+	if (bAllowVerticalStacking && IsFarmPlotItem())
+	{
+		FVector StackTop;
+		if (FindStackTop(HitLocation, StackTop))
+		{
+			HitLocation = StackTop;
+		}
+	}
+
 	float OffsetZ = CurrentPlaceableItem->PreviewOffsetZ;
 	FVector TargetBottom = HitLocation;
 	TargetBottom.Z += OffsetZ;
@@ -306,12 +340,25 @@ bool UPlacementComponent::CanPlaceAtLocation(const FVector& Location, const FVec
 
 	if (bHasOverlap && CurrentPlaceableItem && CurrentPlaceableItem->PlaceableActorClass)
 	{
-		TSubclassOf<AActor> PlaceableClass = CurrentPlaceableItem->PlaceableActorClass;
-		for (const FOverlapResult& Overlap : OverlapResults)
+		const bool bIsFarmPlot = IsFarmPlotItem();
+
+		if (bIsFarmPlot && bAllowVerticalStacking)
 		{
-			if (Overlap.GetActor() && Overlap.GetActor()->GetClass() == PlaceableClass)
+			int32 StackCount = CountStackAt(Location);
+			if (StackCount >= MaxStackHeight)
 			{
 				return false;
+			}
+		}
+		else
+		{
+			TSubclassOf<AActor> PlaceableClass = CurrentPlaceableItem->PlaceableActorClass;
+			for (const FOverlapResult& Overlap : OverlapResults)
+			{
+				if (Overlap.GetActor() && Overlap.GetActor()->GetClass() == PlaceableClass)
+				{
+					return false;
+				}
 			}
 		}
 	}
@@ -628,4 +675,111 @@ float UPlacementComponent::CalculateActorBottomOffset(AActor* Actor) const
 	}
 
 	return 0.0f;
+}
+
+FVector UPlacementComponent::SnapToGrid(const FVector& Location) const
+{
+	if (GridSize <= 0.0f)
+	{
+		return Location;
+	}
+
+	return FVector(
+		FMath::RoundToFloat(Location.X / GridSize) * GridSize,
+		FMath::RoundToFloat(Location.Y / GridSize) * GridSize,
+		Location.Z
+	);
+}
+
+bool UPlacementComponent::FindStackTop(const FVector& BaseLocation, FVector& OutStackTop) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+
+	USoilManagerSubsystem* SoilManager = World->GetSubsystem<USoilManagerSubsystem>();
+	if (!SoilManager)
+	{
+		return false;
+	}
+
+	const float XYTolerance = (GridSize > 0.0f && bSnapToGrid) ? GridSize * 0.5f : PlacementCheckRadius;
+	float HighestZ = BaseLocation.Z;
+	bool bFoundExisting = false;
+
+	for (ASoilPlot* Plot : SoilManager->GetRegisteredPlots())
+	{
+		if (!IsValid(Plot))
+		{
+			continue;
+		}
+
+		FVector PlotLoc = Plot->GetActorLocation();
+		float XYDist = FVector::Dist2D(PlotLoc, BaseLocation);
+		if (XYDist < XYTolerance)
+		{
+			FVector Origin, Extent;
+			Plot->GetActorBounds(false, Origin, Extent);
+			float PlotTop = Origin.Z + Extent.Z;
+			if (PlotTop > HighestZ)
+			{
+				HighestZ = PlotTop;
+			}
+			bFoundExisting = true;
+		}
+	}
+
+	if (bFoundExisting)
+	{
+		OutStackTop = FVector(BaseLocation.X, BaseLocation.Y, HighestZ);
+		return true;
+	}
+
+	return false;
+}
+
+int32 UPlacementComponent::CountStackAt(const FVector& XYLocation) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return 0;
+	}
+
+	USoilManagerSubsystem* SoilManager = World->GetSubsystem<USoilManagerSubsystem>();
+	if (!SoilManager)
+	{
+		return 0;
+	}
+
+	const float XYTolerance = (GridSize > 0.0f && bSnapToGrid) ? GridSize * 0.5f : PlacementCheckRadius;
+	int32 Count = 0;
+
+	for (ASoilPlot* Plot : SoilManager->GetRegisteredPlots())
+	{
+		if (!IsValid(Plot))
+		{
+			continue;
+		}
+
+		float XYDist = FVector::Dist2D(Plot->GetActorLocation(), XYLocation);
+		if (XYDist < XYTolerance)
+		{
+			Count++;
+		}
+	}
+
+	return Count;
+}
+
+bool UPlacementComponent::IsFarmPlotItem() const
+{
+	if (!CurrentPlaceableItem || !CurrentPlaceableItem->PlaceableActorClass)
+	{
+		return false;
+	}
+
+	return CurrentPlaceableItem->PlaceableActorClass->IsChildOf(ASoilPlot::StaticClass());
 }

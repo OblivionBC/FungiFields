@@ -4,6 +4,7 @@
 #include "GameFramework/Character.h"
 #include "AbilitySystemInterface.h"
 #include "FungiFields/Widgets/QuestMenu.h"
+#include "FungiFields/Widgets/USporeJournalWidget.h"
 #include "Logging/LogMacros.h"
 #include "FungiFieldsCharacter.generated.h"
 
@@ -107,6 +108,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* ToggleQuestAction;
 
+	/** Toggle Spore Journal Menu Input Action */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* ToggleSporeJournalAction;
+
 	/** Toggle Backpack Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* ToggleBackpackAction;
@@ -167,6 +172,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
 	TSubclassOf<UQuestMenu> QuestMenuClass;
 
+	/** Spore Journal Widget class to create and display */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
+	TSubclassOf<USporeJournalWidget> SporeJournalClass;
+
 	/** Backpack Widget class to create and display */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
 	TSubclassOf<class UBackpackWidget> BackpackWidgetClass;
@@ -178,6 +187,9 @@ public:
 	/** Instance of the Quest Menu widget */
 	UPROPERTY()
 	TObjectPtr<UQuestMenu> QuestMenuWidget;
+	
+	UPROPERTY()
+    	TObjectPtr<USporeJournalWidget> SporeJournalWidget;
 
 	/** Instance of the Backpack widget */
 	UPROPERTY()
@@ -185,7 +197,7 @@ public:
 
 	bool bQuestMenuVisible = false;
 	bool bBackpackVisible = false;
-
+	bool bSporeJournalVisible = false;
 public:
 	AFungiFieldsCharacter();
 
@@ -208,10 +220,17 @@ protected:
 
 	UFUNCTION()
 	void ToggleQuestMenu(const FInputActionValue& Value);
+	
 
 	UFUNCTION()
 	void OnQuestMenuClosed();
+	
+	UFUNCTION()
+	void ToggleSporeJournal(const FInputActionValue& Value);
 
+	UFUNCTION()
+	void OnSporeJournalClosed();
+	
 	UFUNCTION()
 	void ToggleBackpack(const FInputActionValue& Value);
 

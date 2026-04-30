@@ -1,9 +1,13 @@
 #include "FarmerTargetingComponent.h"
 #include "Engine/World.h"
 #include "../../Interfaces/IHarvestableInterface.h"
+#include "../../Interfaces/IFarmableInterface.h"
 #include "../../Components/UFarmingComponent.h"
 #include "../../Components/UCropGrowthComponent.h"
 #include "../../Subsystems/UCropManagerSubsystem.h"
+#include "../../Subsystems/USoilManagerSubsystem.h"
+#include "../../Actors/ASoilPlot.h"
+#include "../../Data/USeedDataAsset.h"
 #include "../../ENUM/EToolType.h"
 
 UFarmerTargetingComponent::UFarmerTargetingComponent()
@@ -48,16 +52,80 @@ AActor* UFarmerTargetingComponent::FindBestHarvestTarget(const FVector& Origin, 
 	return BestTarget;
 }
 
-AActor* UFarmerTargetingComponent::FindBestPlantTarget(const FVector& Origin)
+AActor* UFarmerTargetingComponent::FindBestPlantTarget(const FVector& Origin, USeedDataAsset* AvailableSeed)
 {
-	// TODO: HH Implement planter role target acquisition in Phase 2.
-	return nullptr;
+	UWorld* World = GetWorld();
+	if (!World || !AvailableSeed)
+		return nullptr;
+
+	USoilManagerSubsystem* SoilManager = World->GetSubsystem<USoilManagerSubsystem>();
+	if (!SoilManager)
+		return nullptr;
+
+	AActor* BestTarget = nullptr;
+	float BestDistanceSquared = TNumericLimits<float>::Max();
+
+	for (const TObjectPtr<ASoilPlot>& Plot : SoilManager->GetRegisteredPlots())
+	{
+		if (!IsValid(Plot))
+			continue;
+
+		if (!Plot->Implements<UFarmableInterface>())
+			continue;
+
+		if (!IFarmableInterface::Execute_CanAcceptSeed(Plot.Get()))
+			continue;
+
+		const float DistanceSquared = FVector::DistSquared(Origin, Plot->GetActorLocation());
+		if (DistanceSquared > FMath::Square(PlantScanRadius))
+			continue;
+
+		if (DistanceSquared < BestDistanceSquared)
+		{
+			BestDistanceSquared = DistanceSquared;
+			BestTarget = Plot.Get();
+		}
+	}
+
+	return BestTarget;
 }
 
 AActor* UFarmerTargetingComponent::FindBestWaterTarget(const FVector& Origin)
 {
-	// TODO: HH Implement waterer role target acquisition in Phase 2.
-	return nullptr;
+	UWorld* World = GetWorld();
+	if (!World)
+		return nullptr;
+
+	USoilManagerSubsystem* SoilManager = World->GetSubsystem<USoilManagerSubsystem>();
+	if (!SoilManager)
+		return nullptr;
+
+	AActor* BestTarget = nullptr;
+	float BestDistanceSquared = TNumericLimits<float>::Max();
+
+	for (const TObjectPtr<ASoilPlot>& Plot : SoilManager->GetRegisteredPlots())
+	{
+		if (!IsValid(Plot))
+			continue;
+
+		if (!Plot->Implements<UFarmableInterface>())
+			continue;
+
+		if (!IFarmableInterface::Execute_CanInteractWithTool(Plot.Get(), EToolType::WateringCan, nullptr))
+			continue;
+
+		const float DistanceSquared = FVector::DistSquared(Origin, Plot->GetActorLocation());
+		if (DistanceSquared > FMath::Square(WaterScanRadius))
+			continue;
+
+		if (DistanceSquared < BestDistanceSquared)
+		{
+			BestDistanceSquared = DistanceSquared;
+			BestTarget = Plot.Get();
+		}
+	}
+
+	return BestTarget;
 }
 
 bool UFarmerTargetingComponent::ShouldRescanHarvestTargets(float CurrentTimeSeconds) const

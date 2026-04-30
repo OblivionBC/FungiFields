@@ -88,6 +88,33 @@ bool UQuestComponent::RemoveQuest(FName QuestID)
 	return false;
 }
 
+bool UQuestComponent::CollectQuestReward(FName QuestID)
+{
+	FQuestProgress* Progress = QuestProgress.Find(QuestID);
+	if (!Progress || Progress->State != EQuestState::ReadyToCollect)
+	{
+		return false;
+	}
+
+	UQuest* Def = QuestDefinitions.FindRef(QuestID).Get();
+	if (!Def)
+	{
+		return false;
+	}
+
+	Progress->State = EQuestState::Completed;
+	DispatchQuestRewards(Def, *Progress);
+	OnQuestCompleted.Broadcast(Def, *Progress);
+
+	if (Def->NextQuest)
+	{
+		AddQuest(Def->NextQuest);
+	}
+
+	OnQuestsUpdated.Broadcast();
+	return true;
+}
+
 void UQuestComponent::SubscribeToComponentEvents()
 {
 	AActor* Owner = GetOwner();
@@ -171,11 +198,6 @@ bool UQuestComponent::AdvanceMatchingQuests(TFunction<bool(const UQuest*)> Shoul
 		if (Progress.State != OldState || Progress.CurrentProgress != OldProg)
 		{
 			bAnyChanged = true;
-			if (Progress.State == EQuestState::Completed)
-			{
-				DispatchQuestRewards(Def, Progress);
-				OnQuestCompleted.Broadcast(Def, Progress);
-			}
 		}
 	}
 

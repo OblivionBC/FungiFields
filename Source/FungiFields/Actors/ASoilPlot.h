@@ -28,6 +28,7 @@ public:
 	ASoilPlot();
 
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	virtual bool InteractTool_Implementation(EToolType ToolType, AActor* Instigator, float ToolPower) override;
 	virtual bool CanAcceptSeed_Implementation() const override;

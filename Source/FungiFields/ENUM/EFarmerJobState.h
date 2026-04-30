@@ -9,5 +9,6 @@ enum class EFarmerJobState : uint8
 	AcquiringTarget,
 	MovingToTarget,
 	PerformingAction,
-	Cooldown
+	Cooldown,
+	Wandering
 };

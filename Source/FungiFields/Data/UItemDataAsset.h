@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "../ENUM/EBuildCategory.h"
 #include "UItemDataAsset.generated.h"
 
 class USoilDataAsset;
@@ -37,6 +38,14 @@ public:
 	/** Mesh to display when item is equipped (attached to RightHandItemSlot socket) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties")
 	UStaticMesh* ItemMesh;
+
+	/** Base sell price when sold to any shop. Used as fallback when the item is not in a shop's stock list. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Economy", meta = (ClampMin = "0.0"))
+	float BaseSellPrice = 1.0f;
+
+	/** Determines placement rules: FarmPlot uses vertical stacking, Structure uses grid-snap, Decoration is free. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Placement")
+	EBuildCategory BuildCategory = EBuildCategory::None;
 
 	/** If true, this item can be placed in the world (e.g., soil containers) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Placement")

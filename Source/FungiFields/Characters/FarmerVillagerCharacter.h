@@ -2,20 +2,28 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "Blueprint/UserWidget.h"
 #include "../ENUM/EToolType.h"
 #include "../ENUM/EFarmerRole.h"
+#include "../Interfaces/InteractableInterface.h"
 #include "FarmerVillagerCharacter.generated.h"
 
 class UFarmingComponent;
 class UInventoryComponent;
 class UFarmerTargetingComponent;
+class UToolDataAsset;
+class USeedDataAsset;
+class UCropDataAsset;
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnVillagerRoleChanged, EFarmerRole, NewRole);
 
 /**
- * Minimal autonomous villager used for Phase 1 farming AI vertical slice.
- * Owns reusable farming components and exposes role configuration to the controller.
+ * Autonomous villager character owned by the player's farm.
+ * Owns reusable farming components and exposes role configuration to the AI controller.
+ * Implements IInteractableInterface so the player can assign roles via the management UI.
  */
 UCLASS()
-class FUNGIFIELDS_API AFarmerVillagerCharacter : public ACharacter
+class FUNGIFIELDS_API AFarmerVillagerCharacter : public ACharacter, public IInteractableInterface
 {
 	GENERATED_BODY()
 
@@ -24,6 +32,11 @@ public:
 
 	virtual void BeginPlay() override;
 
+	// IInteractableInterface
+	virtual void Interact_Implementation(AActor* Interactor) override;
+	virtual FText GetInteractionText_Implementation() override;
+	virtual FText GetTooltipText_Implementation() const override;
+
 	UFUNCTION(BlueprintPure, Category = "AI|Farming")
 	UFarmingComponent* GetFarmingComponent() const { return FarmingComponent; }
 
@@ -31,41 +44,95 @@ public:
 	UFarmerTargetingComponent* GetTargetingComponent() const { return TargetingComponent; }
 
 	UFUNCTION(BlueprintPure, Category = "AI|Farming")
+	UInventoryComponent* GetInventoryComponent() const { return InventoryComponent; }
+
+	UFUNCTION(BlueprintPure, Category = "AI|Farming")
 	EFarmerRole GetAssignedRole() const { return AssignedRole; }
 
-	UFUNCTION(BlueprintPure, Category = "AI|Farming")
-	EToolType GetRoleToolType() const { return ResolveRoleToolType(AssignedRole); }
+	UFUNCTION(BlueprintPure, Category = "Villager")
+	FText GetVillagerDisplayName() const { return VillagerDisplayName; }
 
+	UFUNCTION(BlueprintCallable, Category = "AI|Role")
+	void SetAssignedRole(EFarmerRole NewRole);
+
+	/**
+	 * Returns the first inventory slot containing a tool matching the required type for the current role.
+	 * Returns nullptr if no valid tool is found.
+	 */
 	UFUNCTION(BlueprintPure, Category = "AI|Farming")
-	float GetRoleToolPower() const { return RoleToolPower; }
+	UToolDataAsset* FindEquippedToolForRole() const;
+
+	/**
+	 * Returns the first inventory slot containing any USeedDataAsset.
+	 * OutSlotIndex is set to the found slot index, or INDEX_NONE if no seed found.
+	 */
+	UFUNCTION(BlueprintPure, Category = "AI|Farming")
+	USeedDataAsset* FindSeedInInventory(int32& OutSlotIndex) const;
 
 	UFUNCTION(BlueprintPure, Category = "AI|Debug")
 	bool IsAIDebugLoggingEnabled() const { return bEnableAIDebugLogs; }
 
+	UFUNCTION(BlueprintPure, Category = "AI|Wander")
+	FVector GetHomeLocation() const { return HomeLocation; }
+
+	UPROPERTY(BlueprintAssignable, Category = "AI|Role")
+	FOnVillagerRoleChanged OnRoleChanged;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Wander", meta = (ClampMin = "0.0"))
+	float WanderRadius = 800.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Wander", meta = (ClampMin = "0.05"))
+	float WanderCooldownMin = 3.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Wander", meta = (ClampMin = "0.05"))
+	float WanderCooldownMax = 8.0f;
+
 protected:
-	/** Shared farming executor used by both player and AI flows. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UFarmingComponent> FarmingComponent;
 
-	/** Optional inventory component for compatibility with existing shared systems. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UInventoryComponent> InventoryComponent;
 
-	/** Role-agnostic target finder used by AI controllers. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UFarmerTargetingComponent> TargetingComponent;
+
+	/** Display name shown in UI and interaction prompts. Set per-instance in the level. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Villager")
+	FText VillagerDisplayName = FText::FromString(TEXT("Villager"));
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Role")
 	EFarmerRole AssignedRole = EFarmerRole::Harvester;
 
-	/** Tool power passed into UFarmingComponent::ExecuteFarmingAction. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Role", meta = (ClampMin = "0.1"))
-	float RoleToolPower = 1.0f;
-
-	/** Toggle-friendly debug logs for quick PIE iteration. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Debug")
 	bool bEnableAIDebugLogs = true;
 
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> VillagerManagementWidgetClass;
+
+	/** Optional dialogue widget shown before the management UI. If null, management opens directly. */
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> VillagerDialogueWidgetClass;
+
 private:
+	void OpenManagementWidget(APlayerController* PC);
+
+	UFUNCTION()
+	void OnDialogueManageRequested();
+
+	UFUNCTION()
+	void OnDialogueClosed();
+
+	FVector HomeLocation = FVector::ZeroVector;
+
+	/** Cached controller from the last interaction, used by dialogue callback. */
+	TWeakObjectPtr<APlayerController> LastInteractorPC;
+
 	EToolType ResolveRoleToolType(EFarmerRole FarmerRole) const;
+
+	UFUNCTION()
+	void OnCropHarvestedForMilestone(AActor* Harvester, UCropDataAsset* CropData, int32 Quantity);
+
+	UFUNCTION()
+	void OnSeedPlantedForMilestone(AActor* Planter, USeedDataAsset* SeedData);
 };

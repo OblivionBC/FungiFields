@@ -38,6 +38,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Crop Growth")
 	bool IsWithered() const { return bIsWithered; }
 
+	UFUNCTION(BlueprintPure, Category = "Crop Growth")
+	UCropDataAsset* GetCropData() const { return CropData; }
+
 	UFUNCTION(BlueprintCallable, Category = "Crop Growth")
 	void StartGrowth();
 

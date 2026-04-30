@@ -39,6 +39,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Farming")
 	void SetEquippedTool(EToolType ToolType, float ToolPower);
 
+	UFUNCTION(BlueprintCallable, Category = "Farming")
+	void SetEquippedSeedData(USeedDataAsset* SeedData);
+
 	UFUNCTION(BlueprintPure, Category = "Farming")
 	EToolType GetCurrentToolType() const { return CurrentToolType; }
 

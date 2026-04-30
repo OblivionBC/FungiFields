@@ -53,6 +53,7 @@ void UQuestMenu::RefreshQuests()
 
 		if (UQuestEntryWidget* Entry = CreateWidget<UQuestEntryWidget>(GetOwningPlayer(), QuestEntryWidgetClass))
 		{
+			Entry->SetQuestComponent(BoundQuestComponent);
 			Entry->Setup(Def, Progress);
 			QuestList->AddChild(Entry);
 		}

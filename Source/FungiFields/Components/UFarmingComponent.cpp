@@ -219,6 +219,13 @@ void UFarmingComponent::SetEquippedTool(EToolType ToolType, float ToolPower)
 {
 	CurrentToolType = ToolType;
 	CurrentToolPower = ToolPower;
+	bHasValidTool = (ToolType != EToolType::None);
+}
+
+void UFarmingComponent::SetEquippedSeedData(USeedDataAsset* SeedData)
+{
+	EquippedSeedData = SeedData;
+	bHasSeedEquipped = (SeedData != nullptr);
 }
 
 void UFarmingComponent::UpdateEquippedTool()

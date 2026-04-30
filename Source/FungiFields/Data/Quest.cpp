@@ -64,7 +64,7 @@ void UQuest::AddProgress(FQuestProgress& Progress, int32 Amount) const
 
 	Progress.CurrentProgress = FMath::Min(Progress.CurrentProgress + Amount, RequiredProgress);
 	if (Progress.CurrentProgress >= RequiredProgress)
-		Progress.State = EQuestState::Completed;
+		Progress.State = EQuestState::ReadyToCollect;
 }
 
 void UQuest::FailQuest(FQuestProgress& Progress) const
