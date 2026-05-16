@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "FungiFields/ENUM/QuestState.h"
+#include "FungiFields/ENUM/EQuestState.h"
 #include "FungiFields/ENUM/EQuestEventType.h"
 #include "Engine/DataAsset.h"
 #include "Quest.generated.h"

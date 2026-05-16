@@ -36,6 +36,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Farming")
 	void UseEquippedTool(const FInputActionValue& Value);
 
+	/** Parameterless entry point used by IUsable::UseItem on UToolDataAsset. */
+	UFUNCTION(BlueprintCallable, Category = "Farming")
+	bool ExecuteUse();
+
 	UFUNCTION(BlueprintCallable, Category = "Farming")
 	void SetEquippedTool(EToolType ToolType, float ToolPower);
 

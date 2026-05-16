@@ -10,11 +10,10 @@ class UInventorySlotWidget;
 class UUniformGridPanel;
 struct FInventorySlot;
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnBackpackClosed);
-
 /**
- * Widget displaying the full player inventory (27 slots including hotbar).
- * Accessible via Tab key input.
+ * Reusable inventory grid widget. Displays inventory slots with drag-drop support.
+ * Attach any UInventoryComponent via SetInventoryComponent; defaults to the owning player's inventory.
+ * Does not include a close button — embed this in a parent widget or subclass UPlayerInventoryWidget.
  */
 UCLASS(Abstract)
 class FUNGIFIELDS_API UBackpackWidget : public UUserWidget
@@ -24,27 +23,20 @@ class FUNGIFIELDS_API UBackpackWidget : public UUserWidget
 public:
 	UBackpackWidget(const FObjectInitializer& ObjectInitializer);
 
-	/** Close the backpack widget */
-	UFUNCTION(BlueprintCallable, Category = "Backpack")
-	void CloseBackpack();
-
-	/** Refresh the inventory display - call this to update all slots */
+	/** Refresh the inventory display */
 	UFUNCTION(BlueprintCallable, Category = "Backpack")
 	void RefreshInventory();
 
-	/** Delegate broadcast when backpack is closed */
-	UPROPERTY(BlueprintAssignable, Category = "Backpack")
-	FOnBackpackClosed OnBackpackClosed;
+	/**
+	 * Override the default player-inventory source with an external component
+	 * (e.g. a villager's UInventoryComponent). Call before AddToViewport.
+	 * Pass nullptr to revert to the owning player's inventory.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Backpack")
+	void SetInventoryComponent(UInventoryComponent* InInventory);
 
 protected:
 	virtual void NativeConstruct() override;
-	virtual FReply NativeOnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent) override;
-
-	UFUNCTION()
-	void OnCloseButtonClicked();
-
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<class UButton> CloseButton;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UUniformGridPanel> InventoryGrid;
@@ -77,6 +69,10 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UInventoryComponent> CachedInventoryComponent;
+
+	/** When set, overrides the default player-inventory lookup. */
+	UPROPERTY()
+	TObjectPtr<UInventoryComponent> ExternalInventoryComponent;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UInventorySlotWidget>> SlotWidgets;

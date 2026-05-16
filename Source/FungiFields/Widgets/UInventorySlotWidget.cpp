@@ -244,10 +244,16 @@ FReply UInventorySlotWidget::NativeOnMouseButtonDown(const FGeometry& MyGeometry
 	if (MouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
 		OnSlotClicked.Broadcast(SlotIndex, InventorySourceID);
-		TSharedPtr<SWidget> SlateWidget = GetCachedWidget();
-		if (SlateWidget.IsValid())
+		// Only start drag detection when the slot holds an item. Starting detection on an empty slot
+		// calls NativeOnDragDetected which returns early (OutOperation=null), leaving Slate's drag
+		// state machine in a partial state that can cause subsequent drags to silently fail.
+		if (!CurrentSlotData.IsEmpty())
 		{
-			return FReply::Handled().DetectDrag(SlateWidget.ToSharedRef(), EKeys::LeftMouseButton);
+			TSharedPtr<SWidget> SlateWidget = GetCachedWidget();
+			if (SlateWidget.IsValid())
+			{
+				return FReply::Handled().DetectDrag(SlateWidget.ToSharedRef(), EKeys::LeftMouseButton);
+			}
 		}
 		return FReply::Handled();
 	}
@@ -262,9 +268,6 @@ void UInventorySlotWidget::NativeOnDragDetected(const FGeometry& MyGeometry, con
 		return;
 	}
 
-	// UDragDropOperation needs a widget that was constructed through normal UMG paths (e.g. CreateWidget
-	// or a slot in a widget tree). NewObject<USizeBox/UImage>(GetWorld()) produces objects without a valid
-	// Slate representation and crashes inside the drag-drop code when it builds the drag preview.
 	UInventoryDragDropOperation* DragOperation = NewObject<UInventoryDragDropOperation>(this);
 	if (!DragOperation)
 	{
@@ -274,8 +277,28 @@ void UInventorySlotWidget::NativeOnDragDetected(const FGeometry& MyGeometry, con
 	DragOperation->SourceSlotIndex = SlotIndex;
 	DragOperation->SourceInventoryID = InventorySourceID;
 	DragOperation->SlotData = CurrentSlotData;
-	DragOperation->DefaultDragVisual = this;
 	DragOperation->Pivot = EDragPivot::MouseDown;
+
+	// Create a separate widget for the drag visual using the same Blueprint class as this slot,
+	// so it inherits the correct styling. Using 'this' as the visual was causing the drag system
+	// to leave the source slot in an ambiguous state and interfere with drop detection.
+	if (APlayerController* PC = GetOwningPlayer())
+	{
+		UInventorySlotWidget* DragVisual = CreateWidget<UInventorySlotWidget>(PC, GetClass());
+		if (DragVisual)
+		{
+			DragVisual->SetSlotData(CurrentSlotData, SlotIndex, false);
+			DragOperation->DefaultDragVisual = DragVisual;
+		}
+		else
+		{
+			DragOperation->DefaultDragVisual = this;
+		}
+	}
+	else
+	{
+		DragOperation->DefaultDragVisual = this;
+	}
 
 	OnDragStarted.Broadcast(SlotIndex, InventorySourceID, CurrentSlotData);
 	OutOperation = DragOperation;
@@ -283,8 +306,11 @@ void UInventorySlotWidget::NativeOnDragDetected(const FGeometry& MyGeometry, con
 
 bool UInventorySlotWidget::NativeOnDragOver(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
-	if (Cast<UInventoryDragDropOperation>(InOperation))
+	if (UInventoryDragDropOperation* DragOp = Cast<UInventoryDragDropOperation>(InOperation))
 	{
+		// Reject hovering over the slot that is the drag source.
+		if (DragOp->SourceSlotIndex == SlotIndex && DragOp->SourceInventoryID == InventorySourceID)
+			return false;
 		return true;
 	}
 	return false;
@@ -294,18 +320,22 @@ bool UInventorySlotWidget::NativeOnDrop(const FGeometry& MyGeometry, const FDrag
 {
 	if (UInventoryDragDropOperation* InventoryDragOp = Cast<UInventoryDragDropOperation>(InOperation))
 	{
+		bIsDragTarget = false;
+		UpdateSlotVisuals();
+
+		// Silently ignore a drop onto the originating slot.
+		if (InventoryDragOp->SourceSlotIndex == SlotIndex && InventoryDragOp->SourceInventoryID == InventorySourceID)
+			return false;
+
 		OnSlotDropped.Broadcast(
 			InventoryDragOp->SourceSlotIndex,
 			InventoryDragOp->SourceInventoryID,
 			SlotIndex,
 			InventorySourceID
 		);
-		
-		bIsDragTarget = false;
-		UpdateSlotVisuals();
 		return true;
 	}
-	
+
 	bIsDragTarget = false;
 	UpdateSlotVisuals();
 	return false;
@@ -313,6 +343,12 @@ bool UInventorySlotWidget::NativeOnDrop(const FGeometry& MyGeometry, const FDrag
 
 void UInventorySlotWidget::NativeOnDragEnter(const FGeometry& MyGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
+	// Don't highlight the source slot when drag begins over it.
+	if (UInventoryDragDropOperation* DragOp = Cast<UInventoryDragDropOperation>(InOperation))
+	{
+		if (DragOp->SourceSlotIndex == SlotIndex && DragOp->SourceInventoryID == InventorySourceID)
+			return;
+	}
 	bIsDragTarget = true;
 	UpdateSlotVisuals();
 }

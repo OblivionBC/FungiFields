@@ -42,6 +42,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Day Night")
 	void SkipToMorning();
 
+	/** Jumps the clock to NightStartHour and fires OnNightStarted. */
+	UFUNCTION(BlueprintCallable, Category = "Day Night")
+	void SkipToNight();
+
 	/** Manually set the time (useful for debug / Blueprint scripting). */
 	UFUNCTION(BlueprintCallable, Category = "Day Night")
 	void SetTimeOfDay(float NewTime);

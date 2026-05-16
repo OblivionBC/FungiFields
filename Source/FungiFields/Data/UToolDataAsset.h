@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UItemDataAsset.h"
 #include "../ENUM/EToolType.h"
+#include "../Interfaces/IUsable.h"
 #include "NiagaraSystem.h"
 #include "Particles/ParticleSystem.h"
 #include "UToolDataAsset.generated.h"
@@ -12,12 +13,17 @@
  * Extends UItemDataAsset since tools are items that can be equipped.
  */
 UCLASS(BlueprintType)
-class FUNGIFIELDS_API UToolDataAsset : public UItemDataAsset
+class FUNGIFIELDS_API UToolDataAsset : public UItemDataAsset, public IUsable
 {
 	GENERATED_BODY()
 
 public:
 	UToolDataAsset();
+
+	// IUsable
+	virtual bool UseItem_Implementation(AActor* User) override;
+	virtual bool CanUseItem_Implementation(const AActor* User) const override;
+	virtual bool ShouldConsumeOnUse_Implementation() const override { return false; }
 
 	/** Type of tool */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Tool Properties")

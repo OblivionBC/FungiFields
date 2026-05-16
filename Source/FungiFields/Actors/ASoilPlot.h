@@ -64,6 +64,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Soil Plot")
 	USoilComponent* GetSoilComponent() const { return SoilComponent; }
 
+	/**
+	 * Tints the container mesh to reflect selection state during bed-assignment mode.
+	 * The container material must have a VectorParameter named "SelectionTint".
+	 * Colors: yellow = hover (will assign), cyan = hover on assigned (will unassign), green = assigned, black = none.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Soil Plot")
+	void SetSelectionHighlight(bool bIsHovered, bool bIsAssigned);
+
+	/** Removes any selection tint applied by SetSelectionHighlight. */
+	UFUNCTION(BlueprintCallable, Category = "Soil Plot")
+	void ClearSelectionHighlight();
+
 protected:
 	UFUNCTION()
 	void UpdateVisuals();
@@ -107,6 +119,10 @@ protected:
 	/** Dynamic material instance for the soil mesh */
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> DynamicSoilMaterial;
+
+	/** Lazy-created DMI for the container mesh, used only during bed-assignment selection highlight. */
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> DynamicContainerMaterial;
 
 	/** Configuration data for the container */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Soil Plot")

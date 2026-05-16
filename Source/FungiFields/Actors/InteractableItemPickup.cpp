@@ -78,11 +78,17 @@ void AInteractableItemPickup::TryPickupItem(AActor* PickerUpper)
 		return;
 	}
 
-	bool bSuccess = Inventory->TryAddItem(ItemDataAsset, ItemAmount);
-
-	if (bSuccess)
+	if (Inventory->TryAddItem(ItemDataAsset, ItemAmount))
 	{
-		Destroy();
+		// Same deferred-destroy pattern as AItemPickup — see comment there.
+		SetActorEnableCollision(false);
+		SetActorHiddenInGame(true);
+
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimerForNextTick(
+				FTimerDelegate::CreateWeakLambda(this, [this]() { Destroy(); }));
+		}
 	}
 }
 

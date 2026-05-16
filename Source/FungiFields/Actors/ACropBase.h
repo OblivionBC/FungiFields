@@ -41,6 +41,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Crop")
 	UCropGrowthComponent* GetGrowthComponent() const { return GrowthComponent; }
 
+	UFUNCTION(BlueprintPure, Category = "Crop")
+	ASoilPlot* GetParentSoil() const { return ParentSoil.Get(); }
+
 protected:
 	UFUNCTION()
 	void OnGrowthStageChanged(AActor* Crop, float Progress);

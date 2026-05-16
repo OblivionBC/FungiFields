@@ -20,14 +20,14 @@ class FUNGIFIELDS_API UFarmerTargetingComponent : public UActorComponent
 public:
 	UFarmerTargetingComponent();
 
-	UFUNCTION(BlueprintCallable, Category = "AI|Targeting")
-	AActor* FindBestHarvestTarget(const FVector& Origin, const UFarmingComponent* FarmingComponent, EToolType ToolType);
+	AActor* FindBestHarvestTarget(const FVector& Origin, const UFarmingComponent* FarmingComponent, EToolType ToolType,
+	                               const TArray<TWeakObjectPtr<class ASoilPlot>>& AllowedPlots);
 
-	UFUNCTION(BlueprintCallable, Category = "AI|Targeting")
-	AActor* FindBestPlantTarget(const FVector& Origin, USeedDataAsset* AvailableSeed);
+	AActor* FindBestPlantTarget(const FVector& Origin, USeedDataAsset* AvailableSeed,
+	                             const TArray<TWeakObjectPtr<class ASoilPlot>>& AllowedPlots);
 
-	UFUNCTION(BlueprintCallable, Category = "AI|Targeting")
-	AActor* FindBestWaterTarget(const FVector& Origin);
+	AActor* FindBestWaterTarget(const FVector& Origin,
+	                             const TArray<TWeakObjectPtr<class ASoilPlot>>& AllowedPlots);
 
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Targeting", meta = (ClampMin = "100.0"))

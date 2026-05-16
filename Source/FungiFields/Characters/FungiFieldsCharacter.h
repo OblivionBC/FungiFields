@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "AbilitySystemInterface.h"
-#include "FungiFields/Widgets/QuestMenu.h"
+#include "FungiFields/Widgets/UQuestMenu.h"
 #include "FungiFields/Widgets/USporeJournalWidget.h"
 #include "Logging/LogMacros.h"
 #include "FungiFieldsCharacter.generated.h"
@@ -23,6 +23,8 @@ class UGameplayEffect;
 class UQuestComponent;
 class ULevelAttributeSet;
 class UFarmingComponent;
+class UPlayerInventoryWidget;
+class UCropBedSelectionComponent;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
@@ -63,6 +65,10 @@ public:
 	/** Placement component for handling placeable items */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Placement", meta = (AllowPrivateAccess = "true"))
 	class UPlacementComponent* PlacementComponent;
+
+	/** Handles the Schedule 1-style bed-assignment selection mode. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Farming", meta = (AllowPrivateAccess = "true"))
+	UCropBedSelectionComponent* CropBedSelectionComponent;
 	
 	/** Ability System Component. Required to use Gameplay Attributes and Gameplay Abilities. */
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Abilities", meta = (AllowPrivateAccess = "true"))
@@ -178,8 +184,8 @@ public:
 
 	/** Backpack Widget class to create and display */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
-	TSubclassOf<class UBackpackWidget> BackpackWidgetClass;
-	
+	TSubclassOf<class UPlayerInventoryWidget> BackpackWidgetClass;
+
 	/** Instance of the HUD widget */
 	UPROPERTY()
 	TObjectPtr<UPlayerHUDWidget> HUDWidget;
@@ -187,13 +193,13 @@ public:
 	/** Instance of the Quest Menu widget */
 	UPROPERTY()
 	TObjectPtr<UQuestMenu> QuestMenuWidget;
-	
+
 	UPROPERTY()
     	TObjectPtr<USporeJournalWidget> SporeJournalWidget;
 
 	/** Instance of the Backpack widget */
 	UPROPERTY()
-	TObjectPtr<class UBackpackWidget> BackpackWidget;
+	TObjectPtr<class UPlayerInventoryWidget> BackpackWidget;
 
 	bool bQuestMenuVisible = false;
 	bool bBackpackVisible = false;
@@ -239,6 +245,10 @@ protected:
 
 	UFUNCTION()
 	void OnItemEquipped(UItemDataAsset* Item, int32 SlotIndex);
+
+	/** Left Click dispatcher: routes to IUsable::UseItem for tools/consumables, falls back to FarmingComponent for seeds and soil bags. */
+	UFUNCTION()
+	void UseEquippedItem(const FInputActionValue& Value);
 
 	UFUNCTION()
 	void OnSoilPlotPickedUp(AActor* Picker, class USoilDataAsset* SoilData);

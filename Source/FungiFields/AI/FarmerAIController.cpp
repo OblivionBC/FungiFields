@@ -1,4 +1,7 @@
 #include "FarmerAIController.h"
+#include "BehaviorTree/BehaviorTree.h"
+#include "BehaviorTree/BlackboardComponent.h"
+#include "FarmerBlackboardKeys.h"
 #include "TimerManager.h"
 #include "GameFramework/Pawn.h"
 #include "Navigation/PathFollowingComponent.h"
@@ -7,6 +10,7 @@
 #include "../Components/UFarmingComponent.h"
 #include "../Components/InventoryComponent.h"
 #include "../Components/AI/FarmerTargetingComponent.h"
+#include "../Components/UVillagerNeedsComponent.h"
 #include "../Interfaces/IHarvestableInterface.h"
 #include "../Interfaces/IFarmableInterface.h"
 #include "../Data/UToolDataAsset.h"
@@ -39,9 +43,23 @@ void AFarmerAIController::OnPossess(APawn* InPawn)
 		return;
 	}
 
-	if (UWorld* World = GetWorld())
+	if (bUseBehaviorTree && FarmingBehaviorTree)
 	{
-		World->GetTimerManager().SetTimer(BrainTimerHandle, this, &AFarmerAIController::TickBrain, BrainTickInterval, true);
+		// BT mode: run the behavior tree; services and tasks drive all logic from here on.
+		// Initialize the blackboard with static villager data before the first BT tick.
+		RunBehaviorTree(FarmingBehaviorTree);
+
+		if (UBlackboardComponent* BB = GetBlackboardComponent())
+		{
+			if (CachedVillager)
+				BB->SetValueAsVector(FarmerBBKeys::HomeLocation, CachedVillager->GetHomeLocation());
+		}
+	}
+	else
+	{
+		// Legacy timer-brain — runs until bUseBehaviorTree is enabled.
+		if (UWorld* World = GetWorld())
+			World->GetTimerManager().SetTimer(BrainTimerHandle, this, &AFarmerAIController::TickBrain, BrainTickInterval, true);
 	}
 }
 
@@ -111,6 +129,22 @@ void AFarmerAIController::TickBrain()
 
 	if (CachedVillager)
 	{
+		if (UVillagerNeedsComponent* Needs = CachedVillager->GetNeedsComponent())
+		{
+			const float WorkSpeed = Needs->GetWorkSpeedMultiplier();
+			if (WorkSpeed <= 0.f)
+			{
+				LogDebug(TEXT("Villager is starving — skipping work tick."), ELogVerbosity::Verbose);
+				ClearCurrentTarget();
+				BeginWander();
+				return;
+			}
+			if (WorkSpeed < 1.f && FMath::FRand() > WorkSpeed)
+			{
+				return;
+			}
+		}
+
 		LogDebug(FString::Printf(TEXT("TickBrain: State=%d Role=%s Tool=%s Target=%s"),
 			static_cast<int32>(JobState),
 			*UEnum::GetDisplayValueAsText(CachedVillager->GetAssignedRole()).ToString(),
@@ -138,7 +172,6 @@ void AFarmerAIController::AcquireTargetForRole()
 	if (!CachedVillager)
 		return;
 
-	// Always clear any pending wander when actively looking for work
 	GetWorldTimerManager().ClearTimer(WanderCooldownTimer);
 
 	UToolDataAsset* FoundTool = CachedVillager->FindEquippedToolForRole();
@@ -179,7 +212,7 @@ void AFarmerAIController::AcquireHarvestTarget()
 	if (!CachedVillager)
 		return;
 
-	CurrentTarget = TargetingComponent->FindBestHarvestTarget(CachedVillager->GetActorLocation(), FarmingComponent, GetActiveToolType());
+	CurrentTarget = TargetingComponent->FindBestHarvestTarget(CachedVillager->GetActorLocation(), FarmingComponent, GetActiveToolType(), CachedVillager->GetAssignedPlotsRaw());
 	if (IsValid(CurrentTarget))
 	{
 		LogDebug(FString::Printf(TEXT("Harvest target acquired: %s"), *GetNameSafe(CurrentTarget)));
@@ -206,7 +239,8 @@ void AFarmerAIController::AcquirePlantTarget()
 	CachedSeedSlotIndex = SeedSlotIndex;
 	FarmingComponent->SetEquippedSeedData(FoundSeed);
 
-	CurrentTarget = TargetingComponent->FindBestPlantTarget(CachedVillager->GetActorLocation(), FoundSeed);
+	CurrentTarget = TargetingComponent->FindBestPlantTarget(CachedVillager->GetActorLocation(), FoundSeed,
+		CachedVillager->GetAssignedPlotsRaw());
 	if (IsValid(CurrentTarget))
 	{
 		LogDebug(FString::Printf(TEXT("Plant target acquired: %s"), *GetNameSafe(CurrentTarget)));
@@ -220,7 +254,8 @@ void AFarmerAIController::AcquireWaterTarget()
 	if (!CachedVillager)
 		return;
 
-	CurrentTarget = TargetingComponent->FindBestWaterTarget(CachedVillager->GetActorLocation());
+	CurrentTarget = TargetingComponent->FindBestWaterTarget(CachedVillager->GetActorLocation(),
+		CachedVillager->GetAssignedPlotsRaw());
 	if (IsValid(CurrentTarget))
 	{
 		LogDebug(FString::Printf(TEXT("Water target acquired: %s"), *GetNameSafe(CurrentTarget)));
@@ -328,6 +363,15 @@ void AFarmerAIController::BeginWander()
 
 void AFarmerAIController::ResetToIdle()
 {
+	if (bUseBehaviorTree)
+	{
+		// In BT mode, clear the target key so the tree re-acquires on the next tick.
+		if (UBlackboardComponent* BB = GetBlackboardComponent())
+			BB->ClearValue(FarmerBBKeys::TargetActor);
+		return;
+	}
+
+	// Legacy timer-brain path.
 	ClearCurrentTarget();
 
 	if (UWorld* World = GetWorld())

@@ -78,5 +78,13 @@ public:
 	/** The soil data asset this bag contains (only used if bIsSoilBag is true) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Soil Bag", meta = (EditCondition = "bIsSoilBag"))
 	TObjectPtr<USoilDataAsset> SoilBagSoilDataAsset;
+
+	/** If true, this item can be used to feed a villager when equipped and pressing interact. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Food")
+	bool bIsFood = false;
+
+	/** How much hunger this item restores (0–100). Only relevant when bIsFood is true. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Food", meta = (EditCondition = "bIsFood", ClampMin = "0.0", ClampMax = "100.0"))
+	float FoodRestoreAmount = 25.f;
 };
 

@@ -6,7 +6,6 @@
 #include "UInventoryDragDropOperation.h"
 #include "Components/UniformGridPanel.h"
 #include "Components/UniformGridSlot.h"
-#include "Components/Button.h"
 #include "Blueprint/DragDropOperation.h"
 
 UBackpackWidget::UBackpackWidget(const FObjectInitializer& ObjectInitializer)
@@ -18,35 +17,7 @@ UBackpackWidget::UBackpackWidget(const FObjectInitializer& ObjectInitializer)
 void UBackpackWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-
-	if (CloseButton)
-	{
-		CloseButton->OnClicked.AddDynamic(this, &UBackpackWidget::OnCloseButtonClicked);
-	}
-
 	BindToInventoryComponent();
-}
-
-FReply UBackpackWidget::NativeOnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent)
-{
-	if (InKeyEvent.GetKey() == EKeys::Escape || InKeyEvent.GetKey() == EKeys::Tab)
-	{
-		CloseBackpack();
-		return FReply::Handled();
-	}
-
-	return Super::NativeOnKeyDown(MyGeometry, InKeyEvent);
-}
-
-void UBackpackWidget::OnCloseButtonClicked()
-{
-	CloseBackpack();
-}
-
-void UBackpackWidget::CloseBackpack()
-{
-	SetVisibility(ESlateVisibility::Hidden);
-	OnBackpackClosed.Broadcast();
 }
 
 void UBackpackWidget::RefreshInventory()
@@ -59,19 +30,29 @@ void UBackpackWidget::RefreshInventory()
 	UpdateAllSlots();
 }
 
+void UBackpackWidget::SetInventoryComponent(UInventoryComponent* InInventory)
+{
+	ExternalInventoryComponent = InInventory;
+	CachedInventoryComponent   = nullptr;
+	BindToInventoryComponent();
+}
+
 void UBackpackWidget::BindToInventoryComponent()
 {
-	AFungiFieldsCharacter* PlayerCharacter = GetPlayerCharacter();
-	if (!PlayerCharacter)
+	UInventoryComponent* InventoryComp = nullptr;
+
+	if (ExternalInventoryComponent)
 	{
-		return;
+		InventoryComp = ExternalInventoryComponent;
+	}
+	else
+	{
+		AFungiFieldsCharacter* PlayerCharacter = GetPlayerCharacter();
+		if (!PlayerCharacter) return;
+		InventoryComp = PlayerCharacter->InventoryComponent;
 	}
 
-	UInventoryComponent* InventoryComp = PlayerCharacter->InventoryComponent;
-	if (!InventoryComp)
-	{
-		return;
-	}
+	if (!InventoryComp) return;
 
 	CachedInventoryComponent = InventoryComp;
 

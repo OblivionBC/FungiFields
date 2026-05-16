@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "InteractableActor.h"
+#include "AInteractableActor.h"
 #include "InteractableItemPickup.generated.h"
 
 class UItemDataAsset;

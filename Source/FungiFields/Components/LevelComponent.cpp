@@ -83,6 +83,8 @@ void ULevelComponent::LevelUp(int Levels)
 		EGameplayModOp::Additive,
 		Levels
 	);
+
+	OnLevelUp.Broadcast(static_cast<int32>(LevelAttributeSet->GetLevel()));
 }
 
 void ULevelComponent::LowerByMaxXP(int MaxXP)

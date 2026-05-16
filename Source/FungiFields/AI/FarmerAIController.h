@@ -11,6 +11,7 @@ class UFarmerTargetingComponent;
 class AFarmerVillagerCharacter;
 class UToolDataAsset;
 class USeedDataAsset;
+class UBehaviorTree;
 
 /**
  * Timer-driven controller for autonomous farming tasks.
@@ -31,6 +32,27 @@ public:
 
 	/** Called by AFarmerVillagerCharacter::SetAssignedRole to restart the brain loop cleanly. */
 	void ResetToIdle();
+
+	// ── Behavior Tree migration ────────────────────────────────────────────────
+	//
+	// Set FarmingBehaviorTree in the Blueprint CDO and flip bUseBehaviorTree to
+	// true to activate BT mode.  While false the legacy timer brain runs as before.
+	//
+	// BT setup checklist (do in editor):
+	//   1. Create DA_FarmerBlackboard (BlackboardData) with keys from FarmerBlackboardKeys.h
+	//   2. Create BT_FarmerVillager (BehaviorTree) referencing DA_FarmerBlackboard
+	//   3. Build the tree using BTTask_FindFarmTarget, BTTask_PerformFarmAction,
+	//      BTTask_VillagerWander, BTService_UpdateVillagerNeeds, BTDecorator_IsVillagerStarving
+	//   4. Assign BT_FarmerVillager to FarmingBehaviorTree on this controller's Blueprint
+	//   5. Set bUseBehaviorTree = true
+
+	/** Assign BT_FarmerVillager here once the tree is set up in editor. */
+	UPROPERTY(EditDefaultsOnly, Category = "AI|BehaviorTree")
+	TObjectPtr<UBehaviorTree> FarmingBehaviorTree;
+
+	/** Flip to true to run the Behavior Tree instead of the legacy timer brain. */
+	UPROPERTY(EditDefaultsOnly, Category = "AI|BehaviorTree")
+	bool bUseBehaviorTree = false;
 
 protected:
 	void TickBrain();

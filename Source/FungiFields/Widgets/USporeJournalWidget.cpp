@@ -9,7 +9,7 @@
 #include "../Data/USporeJournalDataAsset.h"
 #include "../Data/UMilestoneDataAsset.h"
 #include "../Subsystems/UMilestoneSubsystem.h"
-#include "../ENUM/QuestState.h"
+#include "../ENUM/EQuestState.h"
 
 void USporeJournalWidget::NativeConstruct()
 {

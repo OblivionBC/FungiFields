@@ -73,7 +73,6 @@ bool UInventoryComponent::TryAddItem(UItemDataAsset* ItemToAdd, int32 Amount)
 	{
 		bAnyItemAdded = true;
 		TotalAdded = Amount - RemainingAmount;
-		BroadcastUpdate();
 	}
 
 	if (RemainingAmount > 0)
@@ -82,14 +81,18 @@ bool UInventoryComponent::TryAddItem(UItemDataAsset* ItemToAdd, int32 Amount)
 		{
 			bAnyItemAdded = true;
 			TotalAdded += RemainingAmount;
-			BroadcastUpdate();
 		}
 	}
 
 	if (bAnyItemAdded)
 	{
+		// Single broadcast after all slot mutations are done.
+		// Previously two BroadcastUpdate() calls could fire in one TryAddItem,
+		// causing a double DestroyComponent/NewObject cycle on EquippedItemMeshComponent
+		// with a hardcoded name — a known trigger for FName "block index out of range".
 		int32 NewTotal = GetItemTotalCount(ItemToAdd);
 		OnItemAdded.Broadcast(ItemToAdd, TotalAdded, NewTotal);
+		BroadcastUpdate();
 	}
 
 	return bAnyItemAdded;
@@ -213,7 +216,9 @@ void UInventoryComponent::UpdateEquippedItemMesh()
 		return;
 	}
 
-	EquippedItemMeshComponent = NewObject<UStaticMeshComponent>(Owner, UStaticMeshComponent::StaticClass(), TEXT("EquippedItemMesh"));
+	// NAME_None lets UE generate a unique object name, preventing FName table collisions
+	// that occur when DestroyComponent + NewObject recycle the same hardcoded name on the same frame.
+	EquippedItemMeshComponent = NewObject<UStaticMeshComponent>(Owner, UStaticMeshComponent::StaticClass(), NAME_None);
 	if (!EquippedItemMeshComponent)
 	{
 		return;

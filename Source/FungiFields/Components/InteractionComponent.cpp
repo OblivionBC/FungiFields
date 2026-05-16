@@ -1,8 +1,10 @@
 #include "InteractionComponent.h"
+#include "UCropBedSelectionComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Engine/World.h"
-#include "../Interfaces/InteractableInterface.h"
-#include "../Widgets/InteractionWidget.h"
+#include "../Interfaces/IInteractableInterface.h"
+#include "../Widgets/UInteractionWidget.h"
+#include "../Characters/FarmerVillagerCharacter.h"
 #include "Blueprint/UserWidget.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
@@ -57,20 +59,34 @@ void UInteractionComponent::Interact(const FInputActionValue& Value)
 	if (!CameraComponent || !World || !Owner)
 		return;
 
+	if (UCropBedSelectionComponent* SelectionComp = Owner->FindComponentByClass<UCropBedSelectionComponent>())
+	{
+		if (SelectionComp->IsSelectionActive())
+		{
+			SelectionComp->HandleInteract();
+			return;
+		}
+	}
+
 	FVector Start = CameraComponent->GetComponentLocation();
 	FVector End = Start + (CameraComponent->GetForwardVector() * TraceDistance);
 
 	FHitResult HitResult;
-	FCollisionQueryParams TraceParams(FName(TEXT("InteractTrace")), true, Owner);
+	FCollisionQueryParams TraceParams(FName(TEXT("InteractTrace")), false, Owner);
 	TraceParams.bReturnPhysicalMaterial = false;
-	TraceParams.bTraceComplex = true;
 
-	if (World->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, TraceParams))
+	const FCollisionShape SweepShape = FCollisionShape::MakeSphere(TraceRadius);
+	if (World->SweepSingleByChannel(HitResult, Start, End, FQuat::Identity, ECC_Visibility, SweepShape, TraceParams))
 	{
 		if (AActor* HitActor = HitResult.GetActor())
 		{
 			if (HitActor->Implements<UInteractableInterface>())
 			{
+				if (AFarmerVillagerCharacter* Villager = Cast<AFarmerVillagerCharacter>(HitActor))
+				{
+					CurrentInteractedVillager = Villager;
+					OnVillagerInteractionStarted.Broadcast(Villager);
+				}
 				IInteractableInterface::Execute_Interact(HitActor, Owner);
 				ClearInteractable();
 			}
@@ -89,9 +105,10 @@ void UInteractionComponent::TraceForInteractable()
 	FVector End = Start + (CameraComponent->GetForwardVector() * TraceDistance);
 
 	FHitResult HitResult;
-	FCollisionQueryParams Params(FName(TEXT("InteractTrace")), true, Owner);
+	FCollisionQueryParams Params(FName(TEXT("InteractTrace")), false, Owner);
 
-	World->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, Params);
+	const FCollisionShape SweepShape = FCollisionShape::MakeSphere(TraceRadius);
+	World->SweepSingleByChannel(HitResult, Start, End, FQuat::Identity, ECC_Visibility, SweepShape, Params);
 	
 	AActor* HitActor = HitResult.GetActor();
 	if (HitActor && HitActor->Implements<UInteractableInterface>())

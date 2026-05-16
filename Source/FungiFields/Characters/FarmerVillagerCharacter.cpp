@@ -1,4 +1,5 @@
 #include "FarmerVillagerCharacter.h"
+#include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
@@ -6,13 +7,17 @@
 #include "../Components/UFarmingComponent.h"
 #include "../Components/InventoryComponent.h"
 #include "../Components/AI/FarmerTargetingComponent.h"
+#include "../Actors/ASoilPlot.h"
+#include "../Components/UVillagerNeedsComponent.h"
+#include "../Components/UBT_DialogueComponent.h"
+#include "../Widgets/UBT_DialogueWidget.h"
 #include "../AI/FarmerAIController.h"
 #include "../Data/UToolDataAsset.h"
 #include "../Data/USeedDataAsset.h"
 #include "../Data/UCropDataAsset.h"
+#include "../Data/UItemDataAsset.h"
 #include "../Inventory/FInventorySlot.h"
 #include "../Widgets/UVillagerManagementWidget.h"
-#include "../Widgets/UVillagerDialogueWidget.h"
 #include "../Subsystems/UMilestoneSubsystem.h"
 
 AFarmerVillagerCharacter::AFarmerVillagerCharacter()
@@ -22,6 +27,7 @@ AFarmerVillagerCharacter::AFarmerVillagerCharacter()
 	FarmingComponent = CreateDefaultSubobject<UFarmingComponent>(TEXT("FarmingComponent"));
 	InventoryComponent = CreateDefaultSubobject<UInventoryComponent>(TEXT("InventoryComponent"));
 	TargetingComponent = CreateDefaultSubobject<UFarmerTargetingComponent>(TEXT("TargetingComponent"));
+	NeedsComponent = CreateDefaultSubobject<UVillagerNeedsComponent>(TEXT("NeedsComponent"));
 
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 	AIControllerClass = AFarmerAIController::StaticClass();
@@ -29,6 +35,10 @@ AFarmerVillagerCharacter::AFarmerVillagerCharacter()
 	GetCharacterMovement()->MaxWalkSpeed = 280.0f;
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	bUseControllerRotationYaw = false;
+
+	// The default Pawn collision preset ignores ECC_Visibility, which makes line/sweep
+	// traces from UInteractionComponent miss the villager capsule. Block it explicitly.
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 }
 
 void AFarmerVillagerCharacter::BeginPlay()
@@ -50,12 +60,27 @@ void AFarmerVillagerCharacter::BeginPlay()
 		FarmingComponent->OnCropHarvested.AddDynamic(this, &AFarmerVillagerCharacter::OnCropHarvestedForMilestone);
 		FarmingComponent->OnSeedPlanted.AddDynamic(this, &AFarmerVillagerCharacter::OnSeedPlantedForMilestone);
 	}
+
+	if (UBT_DialogueComponent* DialogueComp = FindComponentByClass<UBT_DialogueComponent>())
+	{
+		DialogueComp->OnManageOptionSelected.AddDynamic(this, &AFarmerVillagerCharacter::OnDialogueManageRequested);
+	}
 }
 
 void AFarmerVillagerCharacter::Interact_Implementation(AActor* Interactor)
 {
+	UE_LOG(LogTemp, Log, TEXT("AFarmerVillagerCharacter::Interact_Implementation called on '%s'"), *GetName());
+
 	if (!Interactor)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("  -> Interactor is null, returning."));
+		return;
+	}
+
+	// Feeding takes priority: if the player is holding food, feed the villager and exit.
+	if (TryFeedFromInteractor(Interactor))
+	{
+		UE_LOG(LogTemp, Log, TEXT("  -> Fed villager with held food item."));
 		return;
 	}
 
@@ -63,45 +88,68 @@ void AFarmerVillagerCharacter::Interact_Implementation(AActor* Interactor)
 	APlayerController* PC = InteractorPawn ? Cast<APlayerController>(InteractorPawn->GetController()) : nullptr;
 	if (!PC)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("  -> Could not get PlayerController from interactor '%s', returning."), *Interactor->GetName());
 		return;
 	}
 
-	if (VillagerDialogueWidgetClass)
-	{
-		UVillagerDialogueWidget* DialogueWidget = CreateWidget<UVillagerDialogueWidget>(PC, VillagerDialogueWidgetClass);
-		if (DialogueWidget)
-		{
-			LastInteractorPC = PC;
-			DialogueWidget->SetVillager(this);
-			DialogueWidget->OnManageRequested.AddDynamic(this, &AFarmerVillagerCharacter::OnDialogueManageRequested);
-			DialogueWidget->OnDialogueClosed.AddDynamic(this, &AFarmerVillagerCharacter::OnDialogueClosed);
-			DialogueWidget->AddToViewport();
+	LastInteractorPC = PC;
 
-			FInputModeUIOnly InputMode;
-			InputMode.SetWidgetToFocus(DialogueWidget->TakeWidget());
-			PC->SetInputMode(InputMode);
-			PC->bShowMouseCursor = true;
+	if (UBT_DialogueComponent* DialogueComp = FindComponentByClass<UBT_DialogueComponent>())
+	{
+		if (DialogueComp->DialogueWidgetClass)
+		{
+			UE_LOG(LogTemp, Log, TEXT("  -> Delegating to UBT_DialogueComponent."));
+			DialogueComp->InitiateDialogue(Interactor);
 			return;
 		}
+		UE_LOG(LogTemp, Warning, TEXT("  -> UBT_DialogueComponent found but DialogueWidgetClass is null. Falling through to OpenManagementWidget."));
 	}
 
+	UE_LOG(LogTemp, Log, TEXT("  -> Calling OpenManagementWidget. VillagerManagementWidgetClass set: %s"),
+		VillagerManagementWidgetClass ? TEXT("YES") : TEXT("NO — widget will NOT open"));
 	OpenManagementWidget(PC);
+}
+
+bool AFarmerVillagerCharacter::TryFeedFromInteractor(AActor* Interactor)
+{
+	if (!Interactor || !NeedsComponent) return false;
+
+	UInventoryComponent* InvComp = Interactor->FindComponentByClass<UInventoryComponent>();
+	if (!InvComp) return false;
+
+	const int32 EquippedSlot = InvComp->GetEquippedSlot();
+	if (EquippedSlot == INDEX_NONE) return false;
+
+	const TArray<FInventorySlot>& Slots = InvComp->GetInventorySlots();
+	if (!Slots.IsValidIndex(EquippedSlot) || Slots[EquippedSlot].IsEmpty()) return false;
+
+	const UItemDataAsset* ItemDef = Slots[EquippedSlot].ItemDefinition.Get();
+	if (!ItemDef || !ItemDef->bIsFood) return false;
+
+	NeedsComponent->Feed(ItemDef->FoodRestoreAmount);
+	InvComp->ConsumeFromSlot(EquippedSlot, 1);
+	return true;
 }
 
 void AFarmerVillagerCharacter::OnDialogueManageRequested()
 {
-	if (LastInteractorPC.IsValid())
-	{
-		OpenManagementWidget(LastInteractorPC.Get());
-	}
-}
+	// When using UBT_DialogueComponent, prefer its cached PC; otherwise fall back
+	// to the one stored at the start of Interact_Implementation.
+	APlayerController* PC = nullptr;
 
-void AFarmerVillagerCharacter::OnDialogueClosed()
-{
-	if (APlayerController* PC = LastInteractorPC.Get())
+	if (UBT_DialogueComponent* DialogueComp = FindComponentByClass<UBT_DialogueComponent>())
 	{
-		PC->SetInputMode(FInputModeGameOnly());
-		PC->bShowMouseCursor = false;
+		PC = DialogueComp->GetCachedController();
+	}
+
+	if (!PC)
+	{
+		PC = LastInteractorPC.Get();
+	}
+
+	if (PC)
+	{
+		OpenManagementWidget(PC);
 	}
 }
 
@@ -129,6 +177,29 @@ void AFarmerVillagerCharacter::OpenManagementWidget(APlayerController* PC)
 
 FText AFarmerVillagerCharacter::GetInteractionText_Implementation()
 {
+	// Show "Feed" prompt when the player is holding a food item.
+	if (UWorld* World = GetWorld())
+	{
+		if (APlayerController* PC = World->GetFirstPlayerController())
+		{
+			if (APawn* Pawn = PC->GetPawn())
+			{
+				if (UInventoryComponent* InvComp = Pawn->FindComponentByClass<UInventoryComponent>())
+				{
+					const int32 EquippedSlot = InvComp->GetEquippedSlot();
+					const TArray<FInventorySlot>& Slots = InvComp->GetInventorySlots();
+					if (Slots.IsValidIndex(EquippedSlot) && !Slots[EquippedSlot].IsEmpty())
+					{
+						if (const UItemDataAsset* Item = Slots[EquippedSlot].ItemDefinition.Get())
+						{
+							if (Item->bIsFood)
+								return FText::Format(INVTEXT("Feed {0}"), VillagerDisplayName);
+						}
+					}
+				}
+			}
+		}
+	}
 	return FText::Format(INVTEXT("Talk to {0}"), VillagerDisplayName);
 }
 
@@ -232,4 +303,47 @@ void AFarmerVillagerCharacter::OnSeedPlantedForMilestone(AActor* Planter, USeedD
 			MilestoneSubsystem->ReportEvent(TEXT("SeedsPlanted"));
 		}
 	}
+}
+
+bool AFarmerVillagerCharacter::AssignPlot(ASoilPlot* Plot)
+{
+	if (!IsValid(Plot)) return false;
+	if (IsPlotAssigned(Plot)) return false;
+
+	AssignedPlots.RemoveAll([](const TWeakObjectPtr<ASoilPlot>& P) { return !P.IsValid(); });
+
+	const int32 MaxBeds = NeedsComponent ? NeedsComponent->GetMaxAssignedCropBeds() : 3;
+	if (AssignedPlots.Num() >= MaxBeds) return false;
+
+	AssignedPlots.Add(Plot);
+	OnAssignedPlotsChanged.Broadcast();
+	return true;
+}
+
+void AFarmerVillagerCharacter::UnassignPlot(ASoilPlot* Plot)
+{
+	if (!IsValid(Plot)) return;
+	const int32 Removed = AssignedPlots.RemoveAll(
+		[Plot](const TWeakObjectPtr<ASoilPlot>& P) { return P.Get() == Plot; });
+	if (Removed > 0)
+		OnAssignedPlotsChanged.Broadcast();
+}
+
+bool AFarmerVillagerCharacter::IsPlotAssigned(const ASoilPlot* Plot) const
+{
+	for (const TWeakObjectPtr<ASoilPlot>& P : AssignedPlots)
+	{
+		if (P.Get() == Plot) return true;
+	}
+	return false;
+}
+
+int32 AFarmerVillagerCharacter::GetAssignedPlotCount() const
+{
+	int32 Count = 0;
+	for (const TWeakObjectPtr<ASoilPlot>& P : AssignedPlots)
+	{
+		if (P.IsValid()) ++Count;
+	}
+	return Count;
 }

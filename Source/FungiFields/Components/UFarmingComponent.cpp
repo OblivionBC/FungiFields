@@ -11,7 +11,7 @@
 #include "../Data/FHarvestResult.h"
 #include "../Attributes/CharacterAttributeSet.h"
 #include "../Interfaces/ITooltipProvider.h"
-#include "../Widgets/InteractionWidget.h"
+#include "../Widgets/UInteractionWidget.h"
 #include "AbilitySystemInterface.h"
 #include "Engine/World.h"
 #include "Blueprint/UserWidget.h"
@@ -57,29 +57,29 @@ void UFarmingComponent::SetCamera(UCameraComponent* Camera)
 	CameraComponent = Camera;
 }
 
-void UFarmingComponent::UseEquippedTool(const FInputActionValue& Value)
+bool UFarmingComponent::ExecuteUse()
 {
 	if (!CameraComponent)
-		return;
+		return false;
 
 	FHitResult HitResult;
 	if (!PerformToolTrace(HitResult))
-	{
-		return;
-	}
+		return false;
 
 	AActor* HitActor = HitResult.GetActor();
 	if (!HitActor)
-	{
-		return;
-	}
+		return false;
 
-	FVector ActionLocation = HitResult.Location;
 	USeedDataAsset* SeedData = bHasSeedEquipped ? EquippedSeedData : nullptr;
 	EToolType ToolType = bHasValidTool ? CurrentToolType : EToolType::None;
 	float ToolPower = bHasValidTool ? CurrentToolPower : 1.0f;
 
-	ExecuteFarmingAction(HitActor, ActionLocation, ToolType, ToolPower, SeedData);
+	return ExecuteFarmingAction(HitActor, HitResult.Location, ToolType, ToolPower, SeedData);
+}
+
+void UFarmingComponent::UseEquippedTool(const FInputActionValue& Value)
+{
+	ExecuteUse();
 }
 
 bool UFarmingComponent::ExecuteFarmingAction(AActor* TargetActor, const FVector& ActionLocation, EToolType ToolType, float ToolPower, USeedDataAsset* SeedData)

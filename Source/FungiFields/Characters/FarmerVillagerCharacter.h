@@ -5,17 +5,20 @@
 #include "Blueprint/UserWidget.h"
 #include "../ENUM/EToolType.h"
 #include "../ENUM/EFarmerRole.h"
-#include "../Interfaces/InteractableInterface.h"
+#include "../Interfaces/IInteractableInterface.h"
 #include "FarmerVillagerCharacter.generated.h"
 
 class UFarmingComponent;
 class UInventoryComponent;
 class UFarmerTargetingComponent;
+class UVillagerNeedsComponent;
+class ASoilPlot;
 class UToolDataAsset;
 class USeedDataAsset;
 class UCropDataAsset;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnVillagerRoleChanged, EFarmerRole, NewRole);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnAssignedPlotsChanged);
 
 /**
  * Autonomous villager character owned by the player's farm.
@@ -45,6 +48,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "AI|Farming")
 	UInventoryComponent* GetInventoryComponent() const { return InventoryComponent; }
+
+	UFUNCTION(BlueprintPure, Category = "AI|Needs")
+	UVillagerNeedsComponent* GetNeedsComponent() const { return NeedsComponent; }
 
 	UFUNCTION(BlueprintPure, Category = "AI|Farming")
 	EFarmerRole GetAssignedRole() const { return AssignedRole; }
@@ -78,6 +84,25 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "AI|Role")
 	FOnVillagerRoleChanged OnRoleChanged;
 
+	UPROPERTY(BlueprintAssignable, Category = "AI|Beds")
+	FOnAssignedPlotsChanged OnAssignedPlotsChanged;
+
+	/** Assign a soil plot to this villager. Returns false if already at MaxAssignedCropBeds or already assigned. */
+	UFUNCTION(BlueprintCallable, Category = "AI|Beds")
+	bool AssignPlot(ASoilPlot* Plot);
+
+	UFUNCTION(BlueprintCallable, Category = "AI|Beds")
+	void UnassignPlot(ASoilPlot* Plot);
+
+	UFUNCTION(BlueprintPure, Category = "AI|Beds")
+	bool IsPlotAssigned(const ASoilPlot* Plot) const;
+
+	UFUNCTION(BlueprintPure, Category = "AI|Beds")
+	int32 GetAssignedPlotCount() const;
+
+	/** Returns assigned plots as a flat array (removes any stale entries first). */
+	TArray<TWeakObjectPtr<ASoilPlot>>& GetAssignedPlotsRaw() { return AssignedPlots; }
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Wander", meta = (ClampMin = "0.0"))
 	float WanderRadius = 800.0f;
 
@@ -97,6 +122,9 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UFarmerTargetingComponent> TargetingComponent;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UVillagerNeedsComponent> NeedsComponent;
+
 	/** Display name shown in UI and interaction prompts. Set per-instance in the level. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Villager")
 	FText VillagerDisplayName = FText::FromString(TEXT("Villager"));
@@ -110,23 +138,24 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UUserWidget> VillagerManagementWidgetClass;
 
-	/** Optional dialogue widget shown before the management UI. If null, management opens directly. */
-	UPROPERTY(EditDefaultsOnly, Category = "UI")
-	TSubclassOf<UUserWidget> VillagerDialogueWidgetClass;
-
 private:
 	void OpenManagementWidget(APlayerController* PC);
 
-	UFUNCTION()
-	void OnDialogueManageRequested();
+	/**
+	 * If the interactor has a food item equipped, feed this villager and consume one item.
+	 * Returns true if feeding occurred (caller should then skip the dialogue path).
+	 */
+	bool TryFeedFromInteractor(AActor* Interactor);
 
 	UFUNCTION()
-	void OnDialogueClosed();
+	void OnDialogueManageRequested();
 
 	FVector HomeLocation = FVector::ZeroVector;
 
 	/** Cached controller from the last interaction, used by dialogue callback. */
 	TWeakObjectPtr<APlayerController> LastInteractorPC;
+
+	TArray<TWeakObjectPtr<ASoilPlot>> AssignedPlots;
 
 	EToolType ResolveRoleToolType(EFarmerRole FarmerRole) const;
 

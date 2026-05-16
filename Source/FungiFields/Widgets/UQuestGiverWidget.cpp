@@ -5,7 +5,7 @@
 #include "../Actors/AQuestGiverActor.h"
 #include "../Components/QuestComponent.h"
 #include "../Data/Quest.h"
-#include "../ENUM/QuestState.h"
+#include "../ENUM/EQuestState.h"
 
 void UQuestGiverWidget::SetQuestGiver(AQuestGiverActor* QuestGiver, UQuestComponent* QuestComponent)
 {

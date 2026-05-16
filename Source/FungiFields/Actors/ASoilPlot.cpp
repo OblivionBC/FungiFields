@@ -230,7 +230,7 @@ bool ASoilPlot::InteractTool_Implementation(EToolType ToolType, AActor* Interact
 		}
 
 		FVector SpawnLocation = GetActorLocation();
-		SpawnLocation.Z += 10.0f; // Slightly above ground
+		SpawnLocation.Z += 10.0f;
 
 		if (ParticleEffect)
 		{
@@ -566,4 +566,37 @@ bool ASoilPlot::AddSoilFromBag_Implementation(UItemDataAsset* SoilBagItem)
 	
 	Initialize(SoilBagItem->SoilBagSoilDataAsset);
 	return true;
+}
+
+namespace { const FName SelectionTintParam(TEXT("SelectionTint")); }
+
+void ASoilPlot::SetSelectionHighlight(bool bIsHovered, bool bIsAssigned)
+{
+	if (!ContainerMeshComponent) return;
+
+	// Lazy-create a per-instance DMI so we don't mutate the shared container material.
+	if (!DynamicContainerMaterial)
+	{
+		if (UMaterialInterface* Mat = ContainerMeshComponent->GetMaterial(0))
+		{
+			DynamicContainerMaterial = UMaterialInstanceDynamic::Create(Mat, this);
+			ContainerMeshComponent->SetMaterial(0, DynamicContainerMaterial);
+		}
+	}
+
+	if (!DynamicContainerMaterial) return;
+
+	// Additive emissive tint — (0,0,0) means no change to appearance.
+	FLinearColor Tint = FLinearColor::Black;
+	if      (bIsHovered && bIsAssigned)  Tint = FLinearColor(0.0f, 0.12f, 0.28f); // cyan:   will unassign
+	else if (bIsHovered && !bIsAssigned) Tint = FLinearColor(0.28f, 0.18f, 0.0f); // yellow: will assign
+	else if (bIsAssigned)                Tint = FLinearColor(0.0f, 0.18f, 0.03f); // green:  assigned
+
+	DynamicContainerMaterial->SetVectorParameterValue(SelectionTintParam, Tint);
+}
+
+void ASoilPlot::ClearSelectionHighlight()
+{
+	if (DynamicContainerMaterial)
+		DynamicContainerMaterial->SetVectorParameterValue(SelectionTintParam, FLinearColor::Black);
 }

@@ -15,8 +15,9 @@
 #include "../Attributes/CharacterAttributeSet.h"
 #include "../Attributes/EconomyAttributeSet.h"
 #include "../Attributes/LevelAttributeSet.h"
-#include "../Widgets/PlayerHUDWidget.h"
-#include "../Widgets/UBackpackWidget.h"
+#include "../Widgets/UPlayerHUDWidget.h"
+#include "../Widgets/UPlayerInventoryWidget.h"
+#include "../Components/UCropBedSelectionComponent.h"
 #include "Blueprint/UserWidget.h"
 #include "FungiFields/Components/LevelComponent.h"
 #include "FungiFields/Components/QuestComponent.h"
@@ -25,6 +26,8 @@
 #include "FungiFields/Data/USoilDataAsset.h"
 #include "FungiFields/Data/USoilContainerDataAsset.h"
 #include "FungiFields/Data/UItemDataAsset.h"
+#include "FungiFields/Interfaces/IUsable.h"
+#include "FungiFields/Inventory/FInventorySlot.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Engine/AssetManager.h"
 #include "Misc/CoreMiscDefines.h"
@@ -70,6 +73,7 @@ AFungiFieldsCharacter::AFungiFieldsCharacter()
 	LevelComponent = CreateDefaultSubobject<ULevelComponent>(TEXT("LevelComponent"));
 	FarmingComponent = CreateDefaultSubobject<UFarmingComponent>(TEXT("FarmingComponent"));
 	PlacementComponent = CreateDefaultSubobject<UPlacementComponent>(TEXT("PlacementComponent"));
+	CropBedSelectionComponent = CreateDefaultSubobject<UCropBedSelectionComponent>(TEXT("CropBedSelectionComponent"));
 
 	CharacterAttributeSet = CreateDefaultSubobject<UCharacterAttributeSet>(TEXT("CharacterAttributeSet"));
 	EconomyAttributeSet   = CreateDefaultSubobject<UEconomyAttributeSet>(TEXT("EconomyAttributeSet"));
@@ -159,13 +163,13 @@ void AFungiFieldsCharacter::BeginPlay()
 
 		if (BackpackWidgetClass)
 		{
-			BackpackWidget = CreateWidget<UBackpackWidget>(GetWorld(), BackpackWidgetClass);
+			BackpackWidget = CreateWidget<UPlayerInventoryWidget>(GetWorld(), BackpackWidgetClass);
 			if (BackpackWidget)
 			{
 				BackpackWidget->SetOwningPlayer(PC);
 				BackpackWidget->AddToViewport(ModalMenuZOrder);
 				BackpackWidget->SetVisibility(ESlateVisibility::Hidden);
-				BackpackWidget->OnBackpackClosed.AddDynamic(this, &AFungiFieldsCharacter::OnBackpackClosed);
+				BackpackWidget->OnInventoryClosed.AddDynamic(this, &AFungiFieldsCharacter::OnBackpackClosed);
 			}
 		}
 
@@ -240,9 +244,9 @@ void AFungiFieldsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, InteractionComponent, &UInteractionComponent::Interact);
 		}
 		
-		if (FarmingComponent)
+		if (UseToolAction)
 		{
-			EnhancedInputComponent->BindAction(UseToolAction, ETriggerEvent::Started, FarmingComponent, &UFarmingComponent::UseEquippedTool);
+			EnhancedInputComponent->BindAction(UseToolAction, ETriggerEvent::Started, this, &AFungiFieldsCharacter::UseEquippedItem);
 		}
 		
 		EnhancedInputComponent->BindAction(ToggleQuestAction, ETriggerEvent::Started, this, &AFungiFieldsCharacter::ToggleQuestMenu);
@@ -405,7 +409,6 @@ void AFungiFieldsCharacter::OnItemEquipped(UItemDataAsset* Item, int32 SlotIndex
 		return;
 	}
 
-	// If we're already in placement mode, check if we need to update or exit
 	if (PlacementComponent->IsInPlacementMode())
 	{
 		if (Item && Item->bIsPlaceable)
@@ -414,13 +417,11 @@ void AFungiFieldsCharacter::OnItemEquipped(UItemDataAsset* Item, int32 SlotIndex
 		}
 		else
 		{
-			// New item is not placeable, exit placement mode
 			PlacementComponent->ExitPlacementMode();
 		}
 	}
 	else
 	{
-		// Not in placement mode - enter it if the new item is placeable
 		if (Item && Item->bIsPlaceable)
 		{
 			PlacementComponent->EnterPlacementMode(Item);
@@ -537,7 +538,7 @@ void AFungiFieldsCharacter::ToggleBackpack(const FInputActionValue& Value)
 	}
 	else
 	{
-		BackpackWidget->CloseBackpack();
+		BackpackWidget->CloseInventory();
 	}
 }
 
@@ -635,6 +636,38 @@ void AFungiFieldsCharacter::OnContainerPickedUp(AActor* Picker, USoilContainerDa
 		{
 			UE_LOG(LogTemp, Warning, TEXT("AFungiFieldsCharacter::OnContainerPickedUp: No matching placeable item found for container data asset '%s'. Item not added to inventory."), *ContainerData->GetName());
 		}
+	}
+}
+
+void AFungiFieldsCharacter::UseEquippedItem(const FInputActionValue& Value)
+{
+	if (!InventoryComponent) return;
+
+	const int32 EquippedSlot = InventoryComponent->GetEquippedSlot();
+	if (EquippedSlot == INDEX_NONE) return;
+
+	const TArray<FInventorySlot>& Slots = InventoryComponent->GetInventorySlots();
+	if (!Slots.IsValidIndex(EquippedSlot)) return;
+
+	UItemDataAsset* Item = const_cast<UItemDataAsset*>(Slots[EquippedSlot].ItemDefinition.Get());
+	if (!Item) return;
+
+	if (Item->Implements<UUsable>())
+	{
+		if (!IUsable::Execute_CanUseItem(Item, this)) return;
+
+		const bool bUsed = IUsable::Execute_UseItem(Item, this);
+		if (bUsed && IUsable::Execute_ShouldConsumeOnUse(Item))
+		{
+			InventoryComponent->ConsumeFromSlot(EquippedSlot, 1);
+		}
+		return;
+	}
+
+	// Seeds and soil bags don't implement IUsable — fall back to FarmingComponent.
+	if (FarmingComponent)
+	{
+		FarmingComponent->UseEquippedTool(Value);
 	}
 }
 

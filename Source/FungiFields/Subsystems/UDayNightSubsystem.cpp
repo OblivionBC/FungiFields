@@ -53,6 +53,20 @@ void UDayNightSubsystem::SkipToMorning()
 	OnTimeOfDayChanged.Broadcast(TimeOfDay);
 }
 
+void UDayNightSubsystem::SkipToNight()
+{
+	const float OldTime = TimeOfDay;
+	TimeOfDay = NightStartHour;
+
+	if (!bIsCurrentlyNight)
+	{
+		bIsCurrentlyNight = true;
+		BroadcastNightStarted();
+	}
+
+	OnTimeOfDayChanged.Broadcast(TimeOfDay);
+}
+
 void UDayNightSubsystem::SetTimeOfDay(float NewTime)
 {
 	const float OldTime = TimeOfDay;

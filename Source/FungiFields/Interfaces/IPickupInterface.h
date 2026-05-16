@@ -1,0 +1,23 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "UObject/Interface.h"
+#include "IPickupInterface.generated.h"
+
+UINTERFACE()
+class UPickupInterface : public UInterface
+{
+	GENERATED_BODY()
+};
+
+/**
+ * Interface for objects that can be picked up by the player.
+ */
+class FUNGIFIELDS_API IPickupInterface
+{
+	GENERATED_BODY()
+
+public:
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+	void PickupObject();
+};

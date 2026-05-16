@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "InteractableActor.h"
+#include "AInteractableActor.h"
 #include "AChestActor.generated.h"
 
 class UChestInventoryComponent;

@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "../Interfaces/InteractableInterface.h"
+#include "../Interfaces/IInteractableInterface.h"
 #include "ABedActor.generated.h"
 
 class UStaticMeshComponent;

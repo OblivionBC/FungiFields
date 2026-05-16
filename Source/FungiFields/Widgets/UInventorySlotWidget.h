@@ -84,5 +84,6 @@ private:
 	bool bIsEquipped = false;
 	bool bIsDragTarget = false;
 
+	UPROPERTY()
 	TObjectPtr<UItemTooltipWidget> CachedItemTooltip;
 };

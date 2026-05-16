@@ -7,6 +7,7 @@
 #include "../../Subsystems/UCropManagerSubsystem.h"
 #include "../../Subsystems/USoilManagerSubsystem.h"
 #include "../../Actors/ASoilPlot.h"
+#include "../../Actors/ACropBase.h"
 #include "../../Data/USeedDataAsset.h"
 #include "../../ENUM/EToolType.h"
 
@@ -15,7 +16,8 @@ UFarmerTargetingComponent::UFarmerTargetingComponent()
 	PrimaryComponentTick.bCanEverTick = false;
 }
 
-AActor* UFarmerTargetingComponent::FindBestHarvestTarget(const FVector& Origin, const UFarmingComponent* FarmingComponent, EToolType ToolType)
+AActor* UFarmerTargetingComponent::FindBestHarvestTarget(const FVector& Origin, const UFarmingComponent* FarmingComponent,
+                                                          EToolType ToolType, const TArray<TWeakObjectPtr<ASoilPlot>>& AllowedPlots)
 {
 	UWorld* World = GetWorld();
 	if (!World || !FarmingComponent)
@@ -41,7 +43,19 @@ AActor* UFarmerTargetingComponent::FindBestHarvestTarget(const FVector& Origin, 
 
 		AActor* Candidate = GrowthComp->GetOwner();
 		float DistanceSquared = TNumericLimits<float>::Max();
-		if (IsActorValidHarvestTarget(Candidate, Origin, FarmingComponent, ToolType, DistanceSquared) && DistanceSquared < BestDistanceSquared)
+		if (!IsActorValidHarvestTarget(Candidate, Origin, FarmingComponent, ToolType, DistanceSquared))
+			continue;
+
+		if (!AllowedPlots.IsEmpty())
+		{
+			const ACropBase* Crop = Cast<ACropBase>(Candidate);
+			const ASoilPlot* PlotOwner = Crop ? Crop->GetParentSoil() : nullptr;
+			if (!PlotOwner || !AllowedPlots.ContainsByPredicate([PlotOwner](const TWeakObjectPtr<ASoilPlot>& W) {
+				return W.Get() == PlotOwner;
+			})) continue;
+		}
+
+		if (DistanceSquared < BestDistanceSquared)
 		{
 			BestDistanceSquared = DistanceSquared;
 			BestTarget = Candidate;
@@ -52,28 +66,26 @@ AActor* UFarmerTargetingComponent::FindBestHarvestTarget(const FVector& Origin, 
 	return BestTarget;
 }
 
-AActor* UFarmerTargetingComponent::FindBestPlantTarget(const FVector& Origin, USeedDataAsset* AvailableSeed)
+AActor* UFarmerTargetingComponent::FindBestPlantTarget(const FVector& Origin, USeedDataAsset* AvailableSeed,
+                                                        const TArray<TWeakObjectPtr<ASoilPlot>>& AllowedPlots)
 {
 	UWorld* World = GetWorld();
 	if (!World || !AvailableSeed)
 		return nullptr;
 
-	USoilManagerSubsystem* SoilManager = World->GetSubsystem<USoilManagerSubsystem>();
-	if (!SoilManager)
+	if (AllowedPlots.IsEmpty())
 		return nullptr;
 
 	AActor* BestTarget = nullptr;
 	float BestDistanceSquared = TNumericLimits<float>::Max();
 
-	for (const TObjectPtr<ASoilPlot>& Plot : SoilManager->GetRegisteredPlots())
+	for (const TWeakObjectPtr<ASoilPlot>& WeakPlot : AllowedPlots)
 	{
+		ASoilPlot* Plot = WeakPlot.Get();
 		if (!IsValid(Plot))
 			continue;
 
-		if (!Plot->Implements<UFarmableInterface>())
-			continue;
-
-		if (!IFarmableInterface::Execute_CanAcceptSeed(Plot.Get()))
+		if (!IFarmableInterface::Execute_CanAcceptSeed(Plot))
 			continue;
 
 		const float DistanceSquared = FVector::DistSquared(Origin, Plot->GetActorLocation());
@@ -83,35 +95,33 @@ AActor* UFarmerTargetingComponent::FindBestPlantTarget(const FVector& Origin, US
 		if (DistanceSquared < BestDistanceSquared)
 		{
 			BestDistanceSquared = DistanceSquared;
-			BestTarget = Plot.Get();
+			BestTarget = Plot;
 		}
 	}
 
 	return BestTarget;
 }
 
-AActor* UFarmerTargetingComponent::FindBestWaterTarget(const FVector& Origin)
+AActor* UFarmerTargetingComponent::FindBestWaterTarget(const FVector& Origin,
+                                                        const TArray<TWeakObjectPtr<ASoilPlot>>& AllowedPlots)
 {
 	UWorld* World = GetWorld();
 	if (!World)
 		return nullptr;
 
-	USoilManagerSubsystem* SoilManager = World->GetSubsystem<USoilManagerSubsystem>();
-	if (!SoilManager)
+	if (AllowedPlots.IsEmpty())
 		return nullptr;
 
 	AActor* BestTarget = nullptr;
 	float BestDistanceSquared = TNumericLimits<float>::Max();
 
-	for (const TObjectPtr<ASoilPlot>& Plot : SoilManager->GetRegisteredPlots())
+	for (const TWeakObjectPtr<ASoilPlot>& WeakPlot : AllowedPlots)
 	{
+		ASoilPlot* Plot = WeakPlot.Get();
 		if (!IsValid(Plot))
 			continue;
 
-		if (!Plot->Implements<UFarmableInterface>())
-			continue;
-
-		if (!IFarmableInterface::Execute_CanInteractWithTool(Plot.Get(), EToolType::WateringCan, nullptr))
+		if (!IFarmableInterface::Execute_CanInteractWithTool(Plot, EToolType::WateringCan, nullptr))
 			continue;
 
 		const float DistanceSquared = FVector::DistSquared(Origin, Plot->GetActorLocation());
@@ -121,7 +131,7 @@ AActor* UFarmerTargetingComponent::FindBestWaterTarget(const FVector& Origin)
 		if (DistanceSquared < BestDistanceSquared)
 		{
 			BestDistanceSquared = DistanceSquared;
-			BestTarget = Plot.Get();
+			BestTarget = Plot;
 		}
 	}
 

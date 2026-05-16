@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\hengs\\\\Desktop\\\\Projects\\\\CurrentProjects\\\\FungiFields\\\\Source\\\\FungiFields\" -Recurse -Directory)",
+      "Bash(Select-Object FullName)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\hengs\\\\Desktop\\\\Projects\\\\CurrentProjects\\\\FungiFields\\\\Source\\\\FungiFields\\\\ENUM\" -Filter \"*.h\")",
+      "Bash(Select-Object -ExpandProperty Name)"
+    ]
+  }
+}

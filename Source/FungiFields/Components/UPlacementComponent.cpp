@@ -7,7 +7,7 @@
 #include "../Actors/ASoilPlot.h"
 #include "../Components/InventoryComponent.h"
 #include "../Subsystems/USoilManagerSubsystem.h"
-#include "../Widgets/InteractionWidget.h"
+#include "../Widgets/UInteractionWidget.h"
 #include "Engine/World.h"
 #include "Engine/OverlapResult.h"
 #include "DrawDebugHelpers.h"

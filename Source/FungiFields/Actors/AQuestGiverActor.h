@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Blueprint/UserWidget.h"
-#include "../Interfaces/InteractableInterface.h"
+#include "../Interfaces/IInteractableInterface.h"
 #include "AQuestGiverActor.generated.h"
 
 class UQuest;
